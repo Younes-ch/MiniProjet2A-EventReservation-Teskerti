@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: tiskerti-db
+    environment:
+      POSTGRES_DB: tiskerti
+      POSTGRES_USER: tiskerti
+      POSTGRES_PASSWORD: tiskerti
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: tiskerti-api
+    working_dir: /var/www/api
+    volumes:
+      - ./apps/api:/var/www/api
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgresql://tiskerti:tiskerti@db:5432/tiskerti?serverVersion=15&charset=utf8
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    command: sh -c "composer install && php -S 0.0.0.0:8000 -t public"
+
+  web:
+    image: node:20-alpine
+    container_name: tiskerti-web
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+
+  nginx:
+    image: nginx:alpine
+    container_name: tiskerti-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - web
+
+volumes:
+  postgres_data:
