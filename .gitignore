@@ -1,0 +1,30 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Local cache / logs
+*.log
+*.tmp
+
+# Node
+node_modules/
+apps/web/node_modules/
+apps/web/dist/
+
+# PHP / Symfony
+apps/api/vendor/
+apps/api/var/cache/
+apps/api/var/log/
+apps/api/.env.local
+apps/api/.env.test.local
+
+# Docker local volumes and overrides
+postgres_data/
+docker-compose.override.yml
+
+# IDE
+.idea/
+.vscode/*.code-workspace
+
+# Superpowers visual companion runtime state
+.superpowers/
