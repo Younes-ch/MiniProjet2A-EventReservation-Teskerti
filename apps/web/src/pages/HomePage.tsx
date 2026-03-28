@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 type FeaturedEvent = {
   title: string;
   category: string;
@@ -57,9 +59,9 @@ export function HomePage() {
             workshops. Your next unforgettable memory starts here.
           </p>
           <div className="home-hero-actions">
-            <button type="button" className="button-primary">
+            <Link to="/reserve" className="button-primary home-explore-link">
               Explore now
-            </button>
+            </Link>
             <button type="button" className="button-secondary">
               How it works
             </button>
@@ -102,7 +104,10 @@ export function HomePage() {
         </button>
       </section>
 
-      <section className="home-events" aria-labelledby="upcoming-events-heading">
+      <section
+        className="home-events"
+        aria-labelledby="upcoming-events-heading"
+      >
         <div className="home-events-head">
           <div>
             <h2 id="upcoming-events-heading">Upcoming experiences</h2>
@@ -158,7 +163,10 @@ export function HomePage() {
             members-only event discounts.
           </p>
         </div>
-        <form className="home-newsletter-form" onSubmit={(event) => event.preventDefault()}>
+        <form
+          className="home-newsletter-form"
+          onSubmit={(event) => event.preventDefault()}
+        >
           <label htmlFor="newsletter-email" className="sr-only">
             Enter your email
           </label>
@@ -173,12 +181,15 @@ export function HomePage() {
         </form>
       </section>
 
-      <section className="home-footer-shell" aria-label="Community and support links">
+      <section
+        className="home-footer-shell"
+        aria-label="Community and support links"
+      >
         <article>
           <h3>Aura Events</h3>
           <p>
-            Curating the world&apos;s most premium and unique experiences, designed
-            for the curious.
+            Curating the world&apos;s most premium and unique experiences,
+            designed for the curious.
           </p>
         </article>
         <article>
