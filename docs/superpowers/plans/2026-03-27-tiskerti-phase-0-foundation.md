@@ -30,9 +30,6 @@ tiskerti/
     superpowers/
       specs/
       plans/
-  scripts/
-    dev.ps1
-    test.ps1
   .editorconfig
   .gitignore
   docker-compose.yml
