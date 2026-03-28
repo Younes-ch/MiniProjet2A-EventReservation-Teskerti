@@ -66,7 +66,10 @@ export function LoginPage() {
 
         <div className="separator">or fallback to email</div>
 
-        <form className="auth-form" onSubmit={(event) => event.preventDefault()}>
+        <form
+          className="auth-form"
+          onSubmit={(event) => event.preventDefault()}
+        >
           <label htmlFor="email">Email address</label>
           <input id="email" type="email" placeholder="alex@example.com" />
 

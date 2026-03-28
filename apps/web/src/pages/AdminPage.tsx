@@ -59,8 +59,8 @@ export function AdminPage() {
           <p className="eyebrow">Admin shell</p>
           <h1>Dashboard Overview</h1>
           <p className="section-copy">
-            Welcome back, Alex. Here&apos;s what&apos;s happening with your events
-            today.
+            Welcome back, Alex. Here&apos;s what&apos;s happening with your
+            events today.
           </p>
         </div>
 
@@ -80,7 +80,10 @@ export function AdminPage() {
       <div className="admin-kpi-grid">
         {metrics.map((metric) => (
           <article key={metric.label} className="metric-card admin-metric-card">
-            <span className={`admin-metric-dot ${metric.tone}`} aria-hidden="true" />
+            <span
+              className={`admin-metric-dot ${metric.tone}`}
+              aria-hidden="true"
+            />
             <span className="admin-metric-trend">{metric.trend}</span>
             <p>{metric.label}</p>
             <h2>{metric.value}</h2>
@@ -89,7 +92,10 @@ export function AdminPage() {
       </div>
 
       <div className="admin-main-grid">
-        <article className="table-shell admin-events" aria-label="Recent events shell">
+        <article
+          className="table-shell admin-events"
+          aria-label="Recent events shell"
+        >
           <header className="admin-events-head">
             <h2>Recent Events</h2>
             <a href="#">View all</a>
