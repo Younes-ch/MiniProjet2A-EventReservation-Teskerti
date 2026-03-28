@@ -29,7 +29,10 @@ export function AppLayout() {
 
     syncAuthenticationState();
     window.addEventListener("storage", syncAuthenticationState);
-    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, syncAuthenticationState);
+    window.addEventListener(
+      AUTH_SESSION_CHANGED_EVENT,
+      syncAuthenticationState,
+    );
 
     return () => {
       window.removeEventListener("storage", syncAuthenticationState);

@@ -143,7 +143,10 @@ const getEventStatus = (event: PublicEvent): string => {
   return "Active";
 };
 
-const buildMetrics = (events: PublicEvent[], totalReservations: number): AdminMetric[] => {
+const buildMetrics = (
+  events: PublicEvent[],
+  totalReservations: number,
+): AdminMetric[] => {
   const totalEvents = events.length;
   const upcomingEvents = events.filter(
     (event) => event.seats_available > 0,
@@ -490,7 +493,8 @@ export function AdminPage() {
   ]);
 
   const metrics = useMemo(
-    () => buildMetrics(events, reservationMeta?.total_items ?? reservations.length),
+    () =>
+      buildMetrics(events, reservationMeta?.total_items ?? reservations.length),
     [events, reservationMeta, reservations.length],
   );
   const recentEvents = useMemo(() => buildRecentEvents(events), [events]);
@@ -518,7 +522,8 @@ export function AdminPage() {
 
   const canGoToPreviousReservationPage = (reservationMeta?.page ?? 1) > 1;
   const canGoToNextReservationPage =
-    reservationMeta !== null && reservationMeta.page < reservationMeta.total_pages;
+    reservationMeta !== null &&
+    reservationMeta.page < reservationMeta.total_pages;
 
   const runWithFreshAccessToken = async <T,>(
     operation: (token: string) => Promise<T>,
@@ -1077,7 +1082,9 @@ export function AdminPage() {
                 <input
                   type="search"
                   value={reservationQueryInput}
-                  onChange={(event) => setReservationQueryInput(event.target.value)}
+                  onChange={(event) =>
+                    setReservationQueryInput(event.target.value)
+                  }
                   placeholder="Search name, email, event"
                   aria-label="Search reservations"
                 />
@@ -1157,9 +1164,7 @@ export function AdminPage() {
                 <button
                   type="button"
                   className="admin-row-action-button"
-                  onClick={() =>
-                    setReservationPage((current) => current + 1)
-                  }
+                  onClick={() => setReservationPage((current) => current + 1)}
                   disabled={!canGoToNextReservationPage}
                 >
                   Next
