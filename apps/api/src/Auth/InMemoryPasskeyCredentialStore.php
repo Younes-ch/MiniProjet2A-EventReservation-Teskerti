@@ -2,6 +2,8 @@
 
 namespace App\Auth;
 
+use Psr\Cache\CacheItemPoolInterface;
+
 /**
  * @phpstan-type PasskeyCredential array{
  *     email: string,
@@ -14,12 +16,15 @@ final class InMemoryPasskeyCredentialStore
     /**
      * @var array<string, list<PasskeyCredential>>
      */
-    private array $credentialsByEmail = [];
+    private array $seedCredentialsByEmail = [];
 
     /**
      * @param list<PasskeyCredential> $seedCredentials
      */
-    public function __construct(array $seedCredentials)
+    public function __construct(
+        array $seedCredentials,
+        private readonly CacheItemPoolInterface $cachePool,
+    )
     {
         foreach ($seedCredentials as $credential) {
             $email = strtolower(trim((string) ($credential['email'] ?? '')));
@@ -29,7 +34,7 @@ final class InMemoryPasskeyCredentialStore
                 continue;
             }
 
-            $this->credentialsByEmail[$email][] = [
+            $this->seedCredentialsByEmail[$email][] = [
                 'email' => $email,
                 'credential_id' => $credentialId,
                 'label' => (string) ($credential['label'] ?? ''),
@@ -43,7 +48,7 @@ final class InMemoryPasskeyCredentialStore
     public function findAllowedCredentialsByEmail(string $email): array
     {
         $normalizedEmail = strtolower(trim($email));
-        $credentials = $this->credentialsByEmail[$normalizedEmail] ?? [];
+        $credentials = $this->loadCredentialsByEmail($normalizedEmail);
 
         return array_map(
             static fn (array $credential): array => [
@@ -63,7 +68,7 @@ final class InMemoryPasskeyCredentialStore
             return false;
         }
 
-        foreach ($this->credentialsByEmail[$normalizedEmail] ?? [] as $credential) {
+        foreach ($this->loadCredentialsByEmail($normalizedEmail) as $credential) {
             if ($normalizedCredentialId === $credential['credential_id']) {
                 return true;
             }
@@ -85,10 +90,61 @@ final class InMemoryPasskeyCredentialStore
             return;
         }
 
-        $this->credentialsByEmail[$normalizedEmail][] = [
+        $credentials = $this->loadCredentialsByEmail($normalizedEmail);
+        $credentials[] = [
             'email' => $normalizedEmail,
             'credential_id' => $normalizedCredentialId,
             'label' => trim($label),
         ];
+
+        $this->saveCredentialsByEmail($normalizedEmail, $credentials);
+    }
+
+    /**
+     * @return list<PasskeyCredential>
+     */
+    private function loadCredentialsByEmail(string $normalizedEmail): array
+    {
+        if ('' === $normalizedEmail) {
+            return [];
+        }
+
+        $cacheItem = $this->cachePool->getItem($this->buildCacheKey($normalizedEmail));
+
+        if ($cacheItem->isHit()) {
+            /** @var mixed $cachedCredentials */
+            $cachedCredentials = $cacheItem->get();
+            if (is_array($cachedCredentials)) {
+                /** @var list<PasskeyCredential> $normalized */
+                $normalized = array_values(array_filter(
+                    $cachedCredentials,
+                    static fn (mixed $credential): bool => is_array($credential)
+                        && is_string($credential['email'] ?? null)
+                        && is_string($credential['credential_id'] ?? null),
+                ));
+
+                return $normalized;
+            }
+        }
+
+        $seedCredentials = $this->seedCredentialsByEmail[$normalizedEmail] ?? [];
+        $this->saveCredentialsByEmail($normalizedEmail, $seedCredentials);
+
+        return $seedCredentials;
+    }
+
+    /**
+     * @param list<PasskeyCredential> $credentials
+     */
+    private function saveCredentialsByEmail(string $normalizedEmail, array $credentials): void
+    {
+        $cacheItem = $this->cachePool->getItem($this->buildCacheKey($normalizedEmail));
+        $cacheItem->set($credentials);
+        $this->cachePool->save($cacheItem);
+    }
+
+    private function buildCacheKey(string $normalizedEmail): string
+    {
+        return 'auth.passkey_credentials.'.hash('sha256', $normalizedEmail);
     }
 }

@@ -168,6 +168,93 @@ class AuthControllerTest extends WebTestCase
         $this->assertSame('passkey_challenge_invalid', $data['error'] ?? null);
     }
 
+    public function testPasskeyRegisterOptionsRequiresAccessToken(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/auth/passkey/register/options', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(401);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('missing_bearer_token', $data['error'] ?? null);
+    }
+
+    public function testPasskeyRegisterFlowAddsCredentialAndAllowsLogin(): void
+    {
+        $client = static::createClient();
+        $loginData = $this->loginAndGetPayload($client);
+
+        $uniqueCredentialId = 'demo-passkey-register-'.bin2hex(random_bytes(4));
+
+        $client->request('POST', '/api/auth/passkey/register/options', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$loginData['access_token'],
+        ], json_encode([
+            'label' => 'Admin Laptop Passkey',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $registerOptions = $this->decodeResponse($client);
+        $registerChallenge = (string) ($registerOptions['challenge'] ?? '');
+        $this->assertNotSame('', $registerChallenge);
+
+        $client->request('POST', '/api/auth/passkey/register/verify', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$loginData['access_token'],
+        ], json_encode([
+            'challenge' => $registerChallenge,
+            'credential_id' => $uniqueCredentialId,
+            'label' => 'Admin Laptop Passkey',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $registerVerifyData = $this->decodeResponse($client);
+        $this->assertSame('passkey_registered', $registerVerifyData['status'] ?? null);
+        $this->assertSame($uniqueCredentialId, $registerVerifyData['credential']['id'] ?? null);
+        $this->assertGreaterThan(1, $registerVerifyData['total_credentials'] ?? 0);
+
+        $client->request('POST', '/api/auth/passkey/options', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'email' => self::EMAIL,
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $loginOptions = $this->decodeResponse($client);
+        $loginChallenge = (string) ($loginOptions['challenge'] ?? '');
+        $this->assertNotSame('', $loginChallenge);
+
+        $credentialFound = false;
+        foreach (($loginOptions['allow_credentials'] ?? []) as $credential) {
+            if (($credential['id'] ?? null) === $uniqueCredentialId) {
+                $credentialFound = true;
+                break;
+            }
+        }
+
+        $this->assertTrue($credentialFound);
+
+        $client->request('POST', '/api/auth/passkey/verify', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'email' => self::EMAIL,
+            'challenge' => $loginChallenge,
+            'credential_id' => $uniqueCredentialId,
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $passkeyLogin = $this->decodeResponse($client);
+        $this->assertArrayHasKey('access_token', $passkeyLogin);
+        $this->assertArrayHasKey('refresh_token', $passkeyLogin);
+    }
+
     public function testMeReturnsProfileForValidAccessToken(): void
     {
         $client = static::createClient();

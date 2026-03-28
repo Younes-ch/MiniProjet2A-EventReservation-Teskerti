@@ -35,6 +35,7 @@ services:
     App\Auth\InMemoryPasskeyCredentialStore:
         arguments:
             $seedCredentials: '%app.passkey_credentials%'
+            $cachePool: '@cache.app'
 
     App\Auth\InMemoryPasskeyChallengeStore:
         arguments:

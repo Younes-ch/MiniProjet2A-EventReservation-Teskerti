@@ -561,8 +561,9 @@ select:focus-visible,
 
 .admin-search-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  width: min(360px, 100%);
+  width: min(580px, 100%);
 }
 
 .admin-search-input {
@@ -1375,6 +1376,12 @@ select:focus-visible,
   border-color: #f0ccd3;
   background: #fff4f6;
   color: #8e2d40;
+}
+
+.home-api-state-success {
+  border-color: #bfe7da;
+  background: #ecfbf4;
+  color: #156c57;
 }
 
 .home-events-controls {

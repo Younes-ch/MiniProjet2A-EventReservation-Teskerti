@@ -7,8 +7,10 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 import {
+  fetchPasskeyRegistrationOptions,
   fetchAuthenticatedUser,
   refreshAccessToken,
+  verifyPasskeyRegistration,
   type AuthUser,
 } from "../lib/authClient";
 import {
@@ -314,6 +316,26 @@ const mapCrudErrorMessage = (error: unknown): string => {
     return "Reservation status filter is invalid.";
   }
 
+  if (error.message === "passkey_challenge_invalid") {
+    return "Passkey challenge expired. Please try enrollment again.";
+  }
+
+  if (error.message === "passkey_not_registered") {
+    return "No passkey profile found for this user yet.";
+  }
+
+  if (error.message === "passkey_payload_invalid") {
+    return "Passkey payload is invalid.";
+  }
+
+  if (error.message === "passkey_credential_invalid") {
+    return "Passkey credential verification failed.";
+  }
+
+  if (error.message === "passkey_credential_exists") {
+    return "This passkey credential is already registered.";
+  }
+
   if (
     error.message === "invalid_access_token" ||
     error.message === "missing_bearer_token" ||
@@ -381,6 +403,9 @@ export function AdminPage() {
   const [editorValues, setEditorValues] =
     useState<EventEditorValues>(defaultEditorValues);
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(
+    null,
+  );
+  const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(
     null,
   );
   const [isActionSubmitting, setActionSubmitting] = useState(false);
@@ -468,6 +493,7 @@ export function AdminPage() {
         }
         setAccessToken(validAccessToken);
         setActionErrorMessage(null);
+        setActionSuccessMessage(null);
         setDashboardState("ready");
       } catch {
         if (!isMounted) {
@@ -624,6 +650,7 @@ export function AdminPage() {
 
     setActionSubmitting(true);
     setActionErrorMessage(null);
+    setActionSuccessMessage(null);
 
     try {
       if (editorMode === "create") {
@@ -652,6 +679,7 @@ export function AdminPage() {
 
     setActionSubmitting(true);
     setActionErrorMessage(null);
+    setActionSuccessMessage(null);
 
     try {
       await runWithFreshAccessToken((token) =>
@@ -673,12 +701,43 @@ export function AdminPage() {
 
     setActionSubmitting(true);
     setActionErrorMessage(null);
+    setActionSuccessMessage(null);
 
     try {
       await runWithFreshAccessToken((token) =>
         updateAdminReservationStatus(token, reservation.id, nextStatus),
       );
       setReloadNonce((previous) => previous + 1);
+    } catch (error) {
+      setActionErrorMessage(mapCrudErrorMessage(error));
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
+  const handlePasskeyEnrollment = async () => {
+    const generatedCredentialId = `demo-passkey-${Date.now().toString(36)}`;
+
+    setActionSubmitting(true);
+    setActionErrorMessage(null);
+    setActionSuccessMessage(null);
+
+    try {
+      const registrationOptions = await runWithFreshAccessToken((token) =>
+        fetchPasskeyRegistrationOptions(token, "Admin Dashboard Passkey"),
+      );
+
+      const registrationResult = await runWithFreshAccessToken((token) =>
+        verifyPasskeyRegistration(token, {
+          challenge: registrationOptions.challenge,
+          credential_id: generatedCredentialId,
+          label: "Admin Dashboard Passkey",
+        }),
+      );
+
+      setActionSuccessMessage(
+        `Passkey enrolled. Total credentials: ${registrationResult.total_credentials}.`,
+      );
     } catch (error) {
       setActionErrorMessage(mapCrudErrorMessage(error));
     } finally {
@@ -786,6 +845,14 @@ export function AdminPage() {
           >
             Create Event
           </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => void handlePasskeyEnrollment()}
+            disabled={isActionSubmitting}
+          >
+            Enroll Passkey
+          </button>
           <input
             type="search"
             className="admin-search-input"
@@ -801,6 +868,12 @@ export function AdminPage() {
       {actionErrorMessage ? (
         <p className="home-api-state home-api-state-error" role="alert">
           {actionErrorMessage}
+        </p>
+      ) : null}
+
+      {actionSuccessMessage ? (
+        <p className="home-api-state home-api-state-success" role="status">
+          {actionSuccessMessage}
         </p>
       ) : null}
 

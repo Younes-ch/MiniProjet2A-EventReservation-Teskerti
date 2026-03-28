@@ -31,6 +31,34 @@ export type PasskeyVerifyPayload = {
   credential_id: string;
 };
 
+export type PasskeyRegistrationOptionsResponse = {
+  challenge: string;
+  timeout: number;
+  rp_id: string;
+  user: {
+    email: string;
+    display_name: string;
+  };
+  exclude_credentials: PasskeyAllowedCredential[];
+  label: string;
+};
+
+export type PasskeyRegistrationVerifyPayload = {
+  challenge: string;
+  credential_id: string;
+  label?: string;
+};
+
+export type PasskeyRegistrationVerifyResponse = {
+  status: string;
+  credential: {
+    id: string;
+    type: string;
+    label: string;
+  };
+  total_credentials: number;
+};
+
 type LogoutResponse = {
   status: string;
 };
@@ -121,3 +149,35 @@ export const verifyPasskeyLogin = (payload: PasskeyVerifyPayload) =>
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+export const fetchPasskeyRegistrationOptions = (
+  accessToken: string,
+  label?: string,
+) =>
+  requestJson<PasskeyRegistrationOptionsResponse>(
+    "/api/auth/passkey/register/options",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        label,
+      }),
+    },
+  );
+
+export const verifyPasskeyRegistration = (
+  accessToken: string,
+  payload: PasskeyRegistrationVerifyPayload,
+) =>
+  requestJson<PasskeyRegistrationVerifyResponse>(
+    "/api/auth/passkey/register/verify",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
