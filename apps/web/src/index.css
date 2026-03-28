@@ -536,6 +536,12 @@ select:focus-visible,
   gap: 18px;
 }
 
+.admin-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .admin-shell-header {
   display: flex;
   justify-content: space-between;

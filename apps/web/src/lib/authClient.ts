@@ -68,3 +68,11 @@ export const refreshAccessToken = (refreshToken: string) =>
       refresh_token: refreshToken,
     }),
   });
+
+export const fetchAuthenticatedUser = (accessToken: string) =>
+  requestJson<AuthUser>("/api/auth/me", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
