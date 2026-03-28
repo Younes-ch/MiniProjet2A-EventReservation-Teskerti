@@ -7,6 +7,11 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    app.auth_users:
+        - email: 'alex@example.com'
+          display_name: 'Alex Rivera'
+          password_hash: '$2y$12$5yFkWcIIj8xrkUxVUbP.EuuN8tSm9TLP/JpiV5JIo8irAwdS0iNBW'
+          roles: ['ROLE_ADMIN', 'ROLE_USER']
 
 services:
     # default configuration for services in *this* file
@@ -18,6 +23,16 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     App\:
         resource: '../src/'
+
+    App\Auth\InMemoryAuthUserStore:
+        arguments:
+            $users: '%app.auth_users%'
+
+    App\Auth\JwtTokenService:
+        arguments:
+            $secret: '%env(string:JWT_SECRET)%'
+            $accessTokenTtl: '%env(int:JWT_ACCESS_TOKEN_TTL)%'
+            $refreshTokenTtl: '%env(int:JWT_REFRESH_TOKEN_TTL)%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

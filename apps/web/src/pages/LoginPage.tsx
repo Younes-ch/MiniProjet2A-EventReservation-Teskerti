@@ -1,4 +1,7 @@
-import { Link } from "react-router-dom";
+import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { loginWithPassword } from "../lib/authClient";
+import { saveAuthSession } from "../lib/authStorage";
 
 const trustSignals = [
   {
@@ -14,6 +17,73 @@ const trustSignals = [
 ];
 
 export function LoginPage() {
+  const [email, setEmail] = useState("alex@example.com");
+  const [password, setPassword] = useState("Passw0rd!2026");
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const redirectTimeoutRef = useRef<number | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimeoutRef.current !== null) {
+        window.clearTimeout(redirectTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const mapAuthErrorMessage = (error: unknown): string => {
+    if (!(error instanceof Error)) {
+      return "Unable to sign in right now. Please try again.";
+    }
+
+    if ("invalid_credentials" === error.message) {
+      return "Invalid email or password.";
+    }
+
+    if ("email_and_password_required" === error.message) {
+      return "Email and password are required.";
+    }
+
+    if ("invalid_json_payload" === error.message) {
+      return "Unexpected request format while signing in.";
+    }
+
+    return "Auth service is unavailable. Check your API and try again.";
+  };
+
+  const handlePasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setSubmitting(true);
+
+    try {
+      const response = await loginWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      saveAuthSession({
+        accessToken: response.access_token,
+        refreshToken: response.refresh_token,
+        tokenType: response.token_type,
+        expiresIn: response.expires_in,
+        user: response.user,
+      });
+
+      setSuccessMessage("Signed in successfully. Redirecting to admin...");
+      redirectTimeoutRef.current = window.setTimeout(() => {
+        navigate("/admin");
+      }, 700);
+    } catch (error) {
+      setErrorMessage(mapAuthErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <section className="auth-shell auth-shell-login">
       <div className="auth-intro">
@@ -54,22 +124,26 @@ export function LoginPage() {
       <article className="auth-card auth-card-login">
         <h2>Welcome Back</h2>
         <p className="auth-card-sub">Choose your preferred way to continue</p>
+        <p className="auth-demo-credentials">
+          Demo account: alex@example.com / Passw0rd!2026
+        </p>
 
-        <button type="button" className="button-primary wide passkey-button">
+        <button
+          type="button"
+          className="button-primary wide passkey-button"
+          disabled
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="8" />
             <path d="M9.5 12.2c.7-1.2 2.4-1.6 3.6-.9 1.2.7 1.6 2.4.9 3.6" />
             <path d="M10.2 9.7a4.6 4.6 0 0 1 5 7.6" />
           </svg>
-          Continue with Passkey
+          Passkey coming in phase 2
         </button>
 
         <div className="separator">or fallback to email</div>
 
-        <form
-          className="auth-form"
-          onSubmit={(event) => event.preventDefault()}
-        >
+        <form className="auth-form" onSubmit={handlePasswordSubmit}>
           <label htmlFor="email">Email address</label>
           <input
             id="email"
@@ -77,6 +151,8 @@ export function LoginPage() {
             placeholder="alex@example.com"
             autoComplete="email"
             required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
           />
 
           <div className="auth-label-row">
@@ -89,12 +165,33 @@ export function LoginPage() {
             placeholder="........"
             autoComplete="current-password"
             required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
           />
 
-          <button type="submit" className="button-secondary wide">
-            Sign in with password
+          <button
+            type="submit"
+            className="button-secondary wide"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Signing in..." : "Sign in with password"}
           </button>
         </form>
+
+        {errorMessage ? (
+          <p className="auth-form-status auth-form-status-error" role="alert">
+            {errorMessage}
+          </p>
+        ) : null}
+
+        {successMessage ? (
+          <p
+            className="auth-form-status auth-form-status-success"
+            role="status"
+          >
+            {successMessage}
+          </p>
+        ) : null}
 
         <p className="auth-card-footer">
           Don&apos;t have an account? <Link to="/login">Create an account</Link>
