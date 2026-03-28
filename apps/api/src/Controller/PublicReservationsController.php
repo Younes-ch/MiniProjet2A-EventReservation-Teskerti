@@ -62,6 +62,7 @@ final class PublicReservationsController extends AbstractController
             ->setAttendeeName($fullName)
             ->setAttendeeEmail($email)
             ->setAttendeePhone($phone)
+            ->setStatus(Reservation::STATUS_CONFIRMED)
             ->setEvent($event)
             ->setCreatedAt(new \DateTimeImmutable());
 

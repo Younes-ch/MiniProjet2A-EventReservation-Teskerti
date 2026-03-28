@@ -23,4 +23,22 @@ class ReservationRepository extends ServiceEntityRepository
 
         return $reservation;
     }
+
+    /**
+     * @return list<Reservation>
+     */
+    public function findRecentWithEvent(int $limit = 20): array
+    {
+        /** @var list<Reservation> $reservations */
+        $reservations = $this->createQueryBuilder('reservation')
+            ->addSelect('event')
+            ->join('reservation.event', 'event')
+            ->orderBy('reservation.createdAt', 'DESC')
+            ->addOrderBy('reservation.id', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+
+        return $reservations;
+    }
 }

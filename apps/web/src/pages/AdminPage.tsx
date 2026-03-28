@@ -24,6 +24,11 @@ import {
   type PublicEvent,
   type UpsertEventPayload,
 } from "../lib/eventsClient";
+import {
+  fetchAdminReservations,
+  updateAdminReservationStatus,
+  type AdminReservationItem,
+} from "../lib/reservationsClient";
 
 type DashboardState = "loading" | "ready" | "unauthenticated" | "error";
 type EditorMode = "create" | "edit";
@@ -49,6 +54,16 @@ type AdminInsight = {
   label: string;
   detail: string;
   note: string;
+};
+
+type AdminReservationRow = {
+  id: number;
+  reservationCode: string;
+  attendeeName: string;
+  attendeeEmail: string;
+  eventTitle: string;
+  bookedAt: string;
+  status: "confirmed" | "cancelled";
 };
 
 type EventEditorValues = {
@@ -119,13 +134,12 @@ const getEventStatus = (event: PublicEvent): string => {
   return "Active";
 };
 
-const buildMetrics = (events: PublicEvent[]): AdminMetric[] => {
+const buildMetrics = (
+  events: PublicEvent[],
+  reservations: AdminReservationItem[],
+): AdminMetric[] => {
   const totalEvents = events.length;
-  const totalReservations = events.reduce(
-    (sum, event) =>
-      sum + Math.max(event.seats_total - event.seats_available, 0),
-    0,
-  );
+  const totalReservations = reservations.length;
   const upcomingEvents = events.filter(
     (event) => event.seats_available > 0,
   ).length;
@@ -207,6 +221,39 @@ const buildInsights = (events: PublicEvent[]): AdminInsight[] => {
   ];
 };
 
+const formatDateTime = (dateTimeValue: string): string => {
+  const parsedDate = new Date(dateTimeValue);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Date TBD";
+  }
+
+  return parsedDate.toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
+const buildReservationRows = (
+  reservations: AdminReservationItem[],
+): AdminReservationRow[] =>
+  reservations.slice(0, 6).map((reservation) => ({
+    id: reservation.id,
+    reservationCode: reservation.reservation_id,
+    attendeeName: reservation.attendee_name,
+    attendeeEmail: reservation.attendee_email,
+    eventTitle: reservation.event.title ?? "Unknown event",
+    bookedAt: formatDateTime(reservation.created_at),
+    status: reservation.status === "cancelled" ? "cancelled" : "confirmed",
+  }));
+
+const getReservationStatusLabel = (
+  status: "confirmed" | "cancelled",
+): string => (status === "cancelled" ? "Cancelled" : "Confirmed");
+
 const toDatetimeLocalValue = (isoDateTime: string): string => {
   const parsedDate = new Date(isoDateTime);
 
@@ -245,6 +292,14 @@ const mapCrudErrorMessage = (error: unknown): string => {
 
   if (error.message === "event_not_found") {
     return "This event no longer exists.";
+  }
+
+  if (error.message === "reservation_not_found") {
+    return "This reservation no longer exists.";
+  }
+
+  if (error.message === "invalid_reservation_status") {
+    return "Reservation status is invalid.";
   }
 
   if (
@@ -296,6 +351,7 @@ export function AdminPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [events, setEvents] = useState<PublicEvent[]>([]);
+  const [reservations, setReservations] = useState<AdminReservationItem[]>([]);
   const [reloadNonce, setReloadNonce] = useState(0);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isEditorOpen, setEditorOpen] = useState(false);
@@ -364,7 +420,10 @@ export function AdminPage() {
       }
 
       try {
-        const eventsPayload = await fetchAdminEvents(validAccessToken);
+        const [eventsPayload, reservationsPayload] = await Promise.all([
+          fetchAdminEvents(validAccessToken),
+          fetchAdminReservations(validAccessToken),
+        ]);
 
         if (!isMounted) {
           return;
@@ -372,6 +431,7 @@ export function AdminPage() {
 
         setAuthUser(userProfile);
         setEvents(eventsPayload);
+        setReservations(reservationsPayload);
         setAccessToken(validAccessToken);
         setActionErrorMessage(null);
         setDashboardState("ready");
@@ -392,9 +452,16 @@ export function AdminPage() {
     };
   }, [reloadNonce]);
 
-  const metrics = useMemo(() => buildMetrics(events), [events]);
+  const metrics = useMemo(
+    () => buildMetrics(events, reservations),
+    [events, reservations],
+  );
   const recentEvents = useMemo(() => buildRecentEvents(events), [events]);
   const insights = useMemo(() => buildInsights(events), [events]);
+  const recentReservations = useMemo(
+    () => buildReservationRows(reservations),
+    [reservations],
+  );
 
   const runWithFreshAccessToken = async <T,>(
     operation: (token: string) => Promise<T>,
@@ -527,6 +594,27 @@ export function AdminPage() {
     try {
       await runWithFreshAccessToken((token) =>
         deleteAdminEvent(token, eventId),
+      );
+      setReloadNonce((previous) => previous + 1);
+    } catch (error) {
+      setActionErrorMessage(mapCrudErrorMessage(error));
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
+  const handleToggleReservationStatus = async (
+    reservation: AdminReservationRow,
+  ) => {
+    const nextStatus =
+      reservation.status === "confirmed" ? "cancelled" : "confirmed";
+
+    setActionSubmitting(true);
+    setActionErrorMessage(null);
+
+    try {
+      await runWithFreshAccessToken((token) =>
+        updateAdminReservationStatus(token, reservation.id, nextStatus),
       );
       setReloadNonce((previous) => previous + 1);
     } catch (error) {
@@ -858,6 +946,53 @@ export function AdminPage() {
         </article>
 
         <aside className="admin-side-stack">
+          <article className="admin-reservations-card">
+            <header>
+              <h2>Reservation Queue</h2>
+            </header>
+
+            {recentReservations.length > 0 ? (
+              <ul className="admin-reservation-list">
+                {recentReservations.map((reservation) => (
+                  <li
+                    key={reservation.reservationCode}
+                    className="admin-reservation-item"
+                  >
+                    <div className="admin-reservation-main">
+                      <strong>{reservation.attendeeName}</strong>
+                      <small>{reservation.attendeeEmail}</small>
+                      <small>{reservation.eventTitle}</small>
+                    </div>
+                    <div className="admin-reservation-meta">
+                      <span
+                        className={`admin-reservation-status admin-reservation-status-${reservation.status}`}
+                      >
+                        {getReservationStatusLabel(reservation.status)}
+                      </span>
+                      <small>{reservation.bookedAt}</small>
+                      <button
+                        type="button"
+                        className="admin-row-action-button"
+                        onClick={() =>
+                          void handleToggleReservationStatus(reservation)
+                        }
+                        disabled={isActionSubmitting}
+                      >
+                        {reservation.status === "confirmed"
+                          ? "Cancel"
+                          : "Reopen"}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="home-api-state">
+                No reservations have been placed yet.
+              </p>
+            )}
+          </article>
+
           <article className="admin-insight-card">
             <h2>Quick Insights</h2>
             <ul>

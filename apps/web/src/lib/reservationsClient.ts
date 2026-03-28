@@ -17,6 +17,28 @@ export type ReservationResponse = {
   event_location: string;
 };
 
+export type AdminReservationItem = {
+  id: number;
+  reservation_id: string;
+  attendee_name: string;
+  attendee_email: string;
+  attendee_phone: string;
+  status: string;
+  created_at: string;
+  event: {
+    id: number | null;
+    slug: string | null;
+    title: string | null;
+    location: string | null;
+    city: string | null;
+    starts_at: string | null;
+  };
+};
+
+type AdminReservationsListResponse = {
+  items: AdminReservationItem[];
+};
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const buildApiUrl = (path: string) => `${API_BASE_URL}${path}`;
@@ -60,3 +82,36 @@ export const createReservation = (payload: CreateReservationPayload) =>
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+export const fetchAdminReservations = async (
+  accessToken: string,
+): Promise<AdminReservationItem[]> => {
+  const response = await requestJson<AdminReservationsListResponse>(
+    "/api/admin/reservations",
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  return response.items;
+};
+
+export const updateAdminReservationStatus = (
+  accessToken: string,
+  reservationId: number,
+  status: "confirmed" | "cancelled",
+) =>
+  requestJson<AdminReservationItem>(
+    `/api/admin/reservations/${reservationId}/status`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        status,
+      }),
+    },
+  );

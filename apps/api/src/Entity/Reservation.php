@@ -11,6 +11,9 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\UniqueConstraint(name: 'uniq_reservations_reservation_id', columns: ['reservation_id'])]
 class Reservation
 {
+    public const STATUS_CONFIRMED = 'confirmed';
+    public const STATUS_CANCELLED = 'cancelled';
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -27,6 +30,9 @@ class Reservation
 
     #[ORM\Column(name: 'attendee_phone', length: 80)]
     private string $attendeePhone = '';
+
+    #[ORM\Column(length: 24)]
+    private string $status = self::STATUS_CONFIRMED;
 
     #[ORM\ManyToOne(targetEntity: Event::class, inversedBy: 'reservations')]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
@@ -101,6 +107,18 @@ class Reservation
     public function setEvent(Event $event): self
     {
         $this->event = $event;
+
+        return $this;
+    }
+
+    public function getStatus(): string
+    {
+        return $this->status;
+    }
+
+    public function setStatus(string $status): self
+    {
+        $this->status = $status;
 
         return $this;
     }
