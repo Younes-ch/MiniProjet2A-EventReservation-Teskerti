@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-  fetchPublicEventBySlug,
-  type PublicEvent,
-} from "../lib/eventsClient";
+import { fetchPublicEventBySlug, type PublicEvent } from "../lib/eventsClient";
 
 const toneClassByToken: Record<string, string> = {
   indigo: "home-event-tone-indigo",
@@ -143,7 +140,10 @@ export function EventDetailPage() {
 
   return (
     <>
-      <section className="event-detail-hero" aria-labelledby="event-detail-title">
+      <section
+        className="event-detail-hero"
+        aria-labelledby="event-detail-title"
+      >
         <div className="event-detail-copy">
           <p className="eyebrow">{event.category}</p>
           <h1 id="event-detail-title">{event.title}</h1>
@@ -185,8 +185,8 @@ export function EventDetailPage() {
       <section className="event-detail-note" aria-label="Attendee notice">
         <h2>Before you book</h2>
         <p>
-          Bring a valid ID at check-in and arrive at least 30 minutes before
-          the event starts to avoid queue delays.
+          Bring a valid ID at check-in and arrive at least 30 minutes before the
+          event starts to avoid queue delays.
         </p>
       </section>
     </>

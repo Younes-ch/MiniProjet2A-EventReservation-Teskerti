@@ -411,7 +411,10 @@ export function AdminPage() {
     try {
       return await operation(token);
     } catch (error) {
-      if (!(error instanceof Error) || error.message !== "invalid_access_token") {
+      if (
+        !(error instanceof Error) ||
+        error.message !== "invalid_access_token"
+      ) {
         throw error;
       }
 
@@ -495,7 +498,9 @@ export function AdminPage() {
 
     try {
       if (editorMode === "create") {
-        await runWithFreshAccessToken((token) => createAdminEvent(token, payload));
+        await runWithFreshAccessToken((token) =>
+          createAdminEvent(token, payload),
+        );
       } else if (editingEventId !== null) {
         await runWithFreshAccessToken((token) =>
           updateAdminEvent(token, editingEventId, payload),
@@ -520,7 +525,9 @@ export function AdminPage() {
     setActionErrorMessage(null);
 
     try {
-      await runWithFreshAccessToken((token) => deleteAdminEvent(token, eventId));
+      await runWithFreshAccessToken((token) =>
+        deleteAdminEvent(token, eventId),
+      );
       setReloadNonce((previous) => previous + 1);
     } catch (error) {
       setActionErrorMessage(mapCrudErrorMessage(error));
@@ -664,7 +671,9 @@ export function AdminPage() {
                     type="button"
                     className="admin-row-action-button"
                     onClick={() => {
-                      const fullEvent = events.find((item) => item.id === event.id);
+                      const fullEvent = events.find(
+                        (item) => item.id === event.id,
+                      );
                       if (fullEvent) {
                         openEditEditor(fullEvent);
                       }
@@ -675,7 +684,9 @@ export function AdminPage() {
                   <button
                     type="button"
                     className="admin-row-action-button admin-row-action-danger"
-                    onClick={() => void handleDeleteEvent(event.id, event.title)}
+                    onClick={() =>
+                      void handleDeleteEvent(event.id, event.title)
+                    }
                     disabled={isActionSubmitting}
                   >
                     Delete
@@ -692,7 +703,9 @@ export function AdminPage() {
           {isEditorOpen ? (
             <section className="admin-editor-card" aria-label="Event editor">
               <header>
-                <h3>{editorMode === "create" ? "Create Event" : "Edit Event"}</h3>
+                <h3>
+                  {editorMode === "create" ? "Create Event" : "Edit Event"}
+                </h3>
               </header>
 
               <form className="admin-editor-form" onSubmit={handleEditorSubmit}>

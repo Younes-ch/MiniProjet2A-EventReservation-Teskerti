@@ -180,8 +180,9 @@ export function ReservationPage() {
   });
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
-  const [submitErrorMessage, setSubmitErrorMessage] =
-    useState<string | null>(null);
+  const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(
+    null,
+  );
   const navigate = useNavigate();
 
   const formErrors = useMemo(

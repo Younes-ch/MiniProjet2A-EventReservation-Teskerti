@@ -77,7 +77,9 @@ export function HomePage() {
   }, [loadEvents]);
 
   const firstEventSlug = events[0]?.slug;
-  const exploreTarget = firstEventSlug ? `/events/${firstEventSlug}` : "/reserve";
+  const exploreTarget = firstEventSlug
+    ? `/events/${firstEventSlug}`
+    : "/reserve";
 
   return (
     <>
@@ -91,7 +93,10 @@ export function HomePage() {
             workshops. Your next unforgettable memory starts here.
           </p>
           <div className="home-hero-actions">
-            <Link to={exploreTarget} className="button-primary home-explore-link">
+            <Link
+              to={exploreTarget}
+              className="button-primary home-explore-link"
+            >
               Explore now
             </Link>
             <button type="button" className="button-secondary" disabled>
