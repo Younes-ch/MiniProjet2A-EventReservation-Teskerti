@@ -114,8 +114,12 @@ export function HomePage() {
             <p>Handpicked events happening in your area this week.</p>
           </div>
           <div className="home-events-controls">
-            <button type="button">&#8249;</button>
-            <button type="button">&#8250;</button>
+            <button type="button" aria-label="Previous featured events">
+              &#8249;
+            </button>
+            <button type="button" aria-label="Next featured events">
+              &#8250;
+            </button>
           </div>
         </div>
 

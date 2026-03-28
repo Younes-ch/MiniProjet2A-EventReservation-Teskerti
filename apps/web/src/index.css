@@ -40,6 +40,24 @@ body {
   padding: 0 22px 32px;
 }
 
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -44px;
+  z-index: 120;
+  border-radius: 10px;
+  background: #1f2e88;
+  color: #ffffff;
+  padding: 8px 12px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgba(14, 23, 58, 0.24);
+}
+
+.skip-link:focus-visible {
+  top: 10px;
+}
+
 .topbar {
   height: 72px;
   display: flex;
@@ -209,7 +227,11 @@ input:focus-visible,
 select:focus-visible,
 .reservation-modal-close:focus-visible,
 .confirmation-help a:focus-visible,
-.confirmation-footer a:focus-visible {
+.confirmation-footer a:focus-visible,
+.home-events-controls button:focus-visible,
+.home-event-arrow:focus-visible,
+.admin-alert-button:focus-visible,
+.skip-link:focus-visible {
   outline: 3px solid #9faaf8;
   outline-offset: 2px;
 }
@@ -1614,6 +1636,31 @@ select:focus-visible,
   gap: 18px;
 }
 
+.confirmation-toast {
+  margin: 0;
+  border: 1px solid #b7efe5;
+  border-radius: 999px;
+  background: #e6fbf5;
+  color: #0f6f5f;
+  font-size: 0.87rem;
+  font-weight: 700;
+  padding: 8px 14px;
+  letter-spacing: 0.01em;
+  animation: confirmation-toast-in 240ms ease-out;
+}
+
+@keyframes confirmation-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .confirmation-brand {
   display: inline-flex;
   align-items: center;
@@ -2192,5 +2239,11 @@ select:focus-visible,
 
   .hero-actions {
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirmation-toast {
+    animation: none;
   }
 }

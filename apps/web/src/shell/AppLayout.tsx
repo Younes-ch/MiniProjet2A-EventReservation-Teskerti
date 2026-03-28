@@ -6,6 +6,9 @@ const getNavClass = ({ isActive }: NavLinkRenderProps) =>
 export function AppLayout() {
   return (
     <div className="app-shell">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       <header className="topbar">
         <NavLink to="/" className="brand-link">
           Aura Events
@@ -27,7 +30,7 @@ export function AppLayout() {
           Login
         </NavLink>
       </header>
-      <main className="page-content">
+      <main id="main-content" className="page-content" tabIndex={-1}>
         <Outlet />
       </main>
     </div>

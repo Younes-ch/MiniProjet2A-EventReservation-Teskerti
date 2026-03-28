@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 type ConfirmationState = {
@@ -40,14 +41,35 @@ const reservationMeta = [
 export function ConfirmationPage() {
   const location = useLocation();
   const stateFromNavigation = location.state as Partial<ConfirmationState> | null;
+  const [showToast, setShowToast] = useState(Boolean(stateFromNavigation));
 
   const confirmationState: ConfirmationState = {
     ...defaultConfirmationState,
     ...stateFromNavigation,
   };
 
+  useEffect(() => {
+    if (!showToast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowToast(false);
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [showToast]);
+
   return (
     <section className="confirmation-page" aria-labelledby="confirmation-title">
+      {showToast ? (
+        <p className="confirmation-toast" role="status" aria-live="polite">
+          Reservation confirmed for {confirmationState.attendeeName}
+        </p>
+      ) : null}
+
       <div className="confirmation-brand" aria-label="EventFlow">
         <span className="confirmation-brand-mark" aria-hidden="true">
           *
