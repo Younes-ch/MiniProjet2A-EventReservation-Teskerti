@@ -406,6 +406,16 @@ select:focus-visible,
   color: var(--muted);
 }
 
+.auth-demo-credentials {
+  margin-top: 2px;
+  border: 1px dashed #cfd6f2;
+  border-radius: 10px;
+  background: #f4f6ff;
+  color: #42517f;
+  font-size: 0.82rem;
+  padding: 8px 10px;
+}
+
 .passkey-button {
   display: inline-flex;
   align-items: center;
@@ -476,6 +486,26 @@ select:focus-visible,
   margin-top: 8px;
   color: var(--muted);
   text-align: center;
+}
+
+.auth-form-status {
+  border-radius: 10px;
+  border: 1px solid transparent;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.auth-form-status-error {
+  border-color: #f0c5cc;
+  background: #fff5f7;
+  color: #9b2f43;
+}
+
+.auth-form-status-success {
+  border-color: #b8eadf;
+  background: #ecfbf4;
+  color: #166857;
 }
 
 .table-shell {
