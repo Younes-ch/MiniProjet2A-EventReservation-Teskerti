@@ -14,7 +14,9 @@ type ReservationFormValues = {
   phone: string;
 };
 
-type ReservationFormErrors = Partial<Record<keyof ReservationFormValues, string>>;
+type ReservationFormErrors = Partial<
+  Record<keyof ReservationFormValues, string>
+>;
 
 type ReservationConfirmationState = {
   attendeeName: string;
@@ -95,19 +97,24 @@ const packageIncludes = [
 
 export function ReservationPage() {
   const [isModalOpen, setModalOpen] = useState(true);
-  const [formValues, setFormValues] = useState<ReservationFormValues>(initialFormValues);
-  const [touchedFields, setTouchedFields] =
-    useState<Record<keyof ReservationFormValues, boolean>>({
-      fullName: false,
-      email: false,
-      phone: false,
-    });
+  const [formValues, setFormValues] =
+    useState<ReservationFormValues>(initialFormValues);
+  const [touchedFields, setTouchedFields] = useState<
+    Record<keyof ReservationFormValues, boolean>
+  >({
+    fullName: false,
+    email: false,
+    phone: false,
+  });
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
   const submitTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
-  const formErrors = useMemo(() => validateReservationForm(formValues), [formValues]);
+  const formErrors = useMemo(
+    () => validateReservationForm(formValues),
+    [formValues],
+  );
   const isFormValid = Object.keys(formErrors).length === 0;
 
   const shouldShowFieldError = (field: keyof ReservationFormValues) => {
@@ -334,7 +341,11 @@ export function ReservationPage() {
                 }
               />
               {shouldShowFieldError("fullName") ? (
-                <span id="reservation-name-error" className="reservation-field-error" role="alert">
+                <span
+                  id="reservation-name-error"
+                  className="reservation-field-error"
+                  role="alert"
+                >
                   {formErrors.fullName}
                 </span>
               ) : null}
@@ -357,7 +368,11 @@ export function ReservationPage() {
                 }
               />
               {shouldShowFieldError("email") ? (
-                <span id="reservation-email-error" className="reservation-field-error" role="alert">
+                <span
+                  id="reservation-email-error"
+                  className="reservation-field-error"
+                  role="alert"
+                >
                   {formErrors.email}
                 </span>
               ) : null}
@@ -380,7 +395,11 @@ export function ReservationPage() {
                 }
               />
               {shouldShowFieldError("phone") ? (
-                <span id="reservation-phone-error" className="reservation-field-error" role="alert">
+                <span
+                  id="reservation-phone-error"
+                  className="reservation-field-error"
+                  role="alert"
+                >
                   {formErrors.phone}
                 </span>
               ) : null}

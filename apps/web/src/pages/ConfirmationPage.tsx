@@ -40,7 +40,8 @@ const reservationMeta = [
 
 export function ConfirmationPage() {
   const location = useLocation();
-  const stateFromNavigation = location.state as Partial<ConfirmationState> | null;
+  const stateFromNavigation =
+    location.state as Partial<ConfirmationState> | null;
   const [showToast, setShowToast] = useState(Boolean(stateFromNavigation));
 
   const confirmationState: ConfirmationState = {
@@ -107,7 +108,8 @@ export function ConfirmationPage() {
             <p>Reserved for</p>
             <strong>{confirmationState.attendeeName}</strong>
             <span>
-              {confirmationState.attendeeEmail} | {confirmationState.attendeePhone}
+              {confirmationState.attendeeEmail} |{" "}
+              {confirmationState.attendeePhone}
             </span>
           </div>
 
