@@ -108,6 +108,16 @@ body {
   background: linear-gradient(135deg, var(--accent), #4c58cb);
 }
 
+.logout-link {
+  border: 0;
+  font: inherit;
+}
+
+.logout-link:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+
 .page-content {
   display: flex;
   flex-direction: column;

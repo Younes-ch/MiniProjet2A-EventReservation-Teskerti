@@ -87,6 +87,26 @@ class AdminReservationsControllerTest extends WebTestCase
         $this->assertSame('cancelled', $filteredData['meta']['status'] ?? null);
     }
 
+    public function testAdminCanFilterReservationsByEventSlug(): void
+    {
+        $client = static::createClient();
+        $accessToken = $this->loginAndGetAccessToken($client);
+
+        $this->createReservation($client, 'midnight-resonance-2-0', 'Alya Five', 'alya5@example.com');
+        $this->createReservation($client, 'ephemeral-visions-gallery', 'Alya Six', 'alya6@example.com');
+
+        $client->request('GET', '/api/admin/reservations?page=1&per_page=6&event_slug=ephemeral-visions-gallery', [], [], [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $data = $this->decodeResponse($client);
+        $this->assertCount(1, $data['items']);
+        $this->assertSame('ephemeral-visions-gallery', $data['items'][0]['event']['slug'] ?? null);
+        $this->assertSame('ephemeral-visions-gallery', $data['meta']['event_slug'] ?? null);
+    }
+
     public function testAdminReservationsListRejectsInvalidStatusFilter(): void
     {
         $client = static::createClient();
