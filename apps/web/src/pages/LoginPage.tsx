@@ -3,6 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   fetchPasskeyOptions,
   loginWithPassword,
+  type AuthTokenResponse,
+  type PasskeyOptionsResponse,
+  type PasswordLoginResponse,
   verifyPasskeyLogin,
 } from "../lib/authClient";
 import { saveAuthSession } from "../lib/authStorage";
@@ -20,6 +23,21 @@ const trustSignals = [
   },
 ];
 
+const isPasskeyStepResponse = (
+  response: PasswordLoginResponse,
+): response is Extract<PasswordLoginResponse, { requires_passkey: true }> =>
+  "requires_passkey" in response && response.requires_passkey === true;
+
+const persistAuthSession = (response: AuthTokenResponse) => {
+  saveAuthSession({
+    accessToken: response.access_token,
+    refreshToken: response.refresh_token,
+    tokenType: response.token_type,
+    expiresIn: response.expires_in,
+    user: response.user,
+  });
+};
+
 export function LoginPage() {
   const [email, setEmail] = useState("alex@example.com");
   const [password, setPassword] = useState("Passw0rd!2026");
@@ -29,6 +47,34 @@ export function LoginPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const redirectTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
+
+  const buildClientData = (
+    type: "webauthn.get" | "webauthn.create",
+    challenge: string,
+  ) => ({
+    type,
+    challenge,
+    origin: window.location.origin,
+  });
+
+  const completePasskeySignIn = async (
+    normalizedEmail: string,
+    options: PasskeyOptionsResponse,
+  ) => {
+    const firstAllowedCredential = options.allow_credentials[0]?.id ?? "";
+    if (firstAllowedCredential.length === 0) {
+      throw new Error("passkey_not_registered");
+    }
+
+    const response = await verifyPasskeyLogin({
+      email: normalizedEmail,
+      challenge: options.challenge,
+      credential_id: firstAllowedCredential,
+      client_data: buildClientData("webauthn.get", options.challenge),
+    });
+
+    persistAuthSession(response);
+  };
 
   useEffect(() => {
     return () => {
@@ -63,6 +109,18 @@ export function LoginPage() {
       return "No passkey is registered for this account yet.";
     }
 
+    if ("passkey_required_but_not_registered" === error.message) {
+      return "This account requires passkey verification, but no passkey is registered.";
+    }
+
+    if ("passkey_verification_required" === error.message) {
+      return "Passkey verification is required before you can continue.";
+    }
+
+    if ("passkey_origin_invalid" === error.message) {
+      return "This passkey request origin is not allowed.";
+    }
+
     if (
       "passkey_challenge_invalid" === error.message ||
       "passkey_credential_invalid" === error.message ||
@@ -82,25 +140,7 @@ export function LoginPage() {
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const options = await fetchPasskeyOptions(normalizedEmail);
-
-      const firstAllowedCredential = options.allow_credentials[0]?.id ?? "";
-      if (firstAllowedCredential.length === 0) {
-        throw new Error("passkey_not_registered");
-      }
-
-      const response = await verifyPasskeyLogin({
-        email: normalizedEmail,
-        challenge: options.challenge,
-        credential_id: firstAllowedCredential,
-      });
-
-      saveAuthSession({
-        accessToken: response.access_token,
-        refreshToken: response.refresh_token,
-        tokenType: response.token_type,
-        expiresIn: response.expires_in,
-        user: response.user,
-      });
+      await completePasskeySignIn(normalizedEmail, options);
 
       setSuccessMessage("Signed in with passkey. Redirecting to admin...");
       redirectTimeoutRef.current = window.setTimeout(() => {
@@ -120,18 +160,30 @@ export function LoginPage() {
     setSubmitting(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       const response = await loginWithPassword({
-        email: email.trim(),
+        email: normalizedEmail,
         password,
       });
 
-      saveAuthSession({
-        accessToken: response.access_token,
-        refreshToken: response.refresh_token,
-        tokenType: response.token_type,
-        expiresIn: response.expires_in,
-        user: response.user,
-      });
+      if (isPasskeyStepResponse(response)) {
+        setSuccessMessage(
+          "Password accepted. Completing passkey verification...",
+        );
+        await completePasskeySignIn(normalizedEmail, response.passkey_options);
+
+        setSuccessMessage(
+          "Signed in with password + passkey. Redirecting to admin...",
+        );
+        redirectTimeoutRef.current = window.setTimeout(() => {
+          navigate("/admin");
+        }, 700);
+
+        return;
+      }
+
+      persistAuthSession(response);
 
       setSuccessMessage("Signed in successfully. Redirecting to admin...");
       redirectTimeoutRef.current = window.setTimeout(() => {

@@ -561,8 +561,9 @@ select:focus-visible,
 
 .admin-search-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  width: min(360px, 100%);
+  width: min(580px, 100%);
 }
 
 .admin-search-input {
@@ -781,6 +782,82 @@ select:focus-visible,
 .admin-side-stack {
   display: grid;
   gap: 14px;
+}
+
+.admin-passkey-card {
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.admin-passkey-card h2 {
+  font-size: 1.2rem;
+}
+
+.admin-passkey-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-passkey-head small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.admin-passkey-copy {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.admin-passkey-credential-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-passkey-credential-item {
+  border: 1px solid #e2e8f7;
+  border-radius: 12px;
+  background: #fbfcff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-passkey-credential-item label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #435186;
+}
+
+.admin-passkey-credential-item input {
+  border: 1px solid #d2d9ef;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 8px 10px;
+}
+
+.admin-passkey-credential-item small {
+  color: var(--muted);
+  font-size: 0.73rem;
+  overflow-wrap: anywhere;
 }
 
 .admin-reservations-card {
@@ -1375,6 +1452,12 @@ select:focus-visible,
   border-color: #f0ccd3;
   background: #fff4f6;
   color: #8e2d40;
+}
+
+.home-api-state-success {
+  border-color: #bfe7da;
+  background: #ecfbf4;
+  color: #156c57;
 }
 
 .home-events-controls {

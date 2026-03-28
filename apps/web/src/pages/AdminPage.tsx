@@ -7,9 +7,17 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 import {
+  fetchPasskeyRegistrationOptions,
   fetchAuthenticatedUser,
+  fetchPasskeyCredentials,
+  fetchPasskeyPolicy,
+  renamePasskeyCredential,
   refreshAccessToken,
-  type AuthUser,
+  revokePasskeyCredential,
+  updatePasskeyPolicy,
+  verifyPasskeyRegistration,
+  type AuthProfile,
+  type PasskeyCredentialItem,
 } from "../lib/authClient";
 import {
   clearAuthSession,
@@ -143,7 +151,10 @@ const getEventStatus = (event: PublicEvent): string => {
   return "Active";
 };
 
-const buildMetrics = (events: PublicEvent[], totalReservations: number): AdminMetric[] => {
+const buildMetrics = (
+  events: PublicEvent[],
+  totalReservations: number,
+): AdminMetric[] => {
   const totalEvents = events.length;
   const upcomingEvents = events.filter(
     (event) => event.seats_available > 0,
@@ -311,6 +322,46 @@ const mapCrudErrorMessage = (error: unknown): string => {
     return "Reservation status filter is invalid.";
   }
 
+  if (error.message === "passkey_challenge_invalid") {
+    return "Passkey challenge expired. Please try enrollment again.";
+  }
+
+  if (error.message === "passkey_not_registered") {
+    return "No passkey profile found for this user yet.";
+  }
+
+  if (error.message === "passkey_payload_invalid") {
+    return "Passkey payload is invalid.";
+  }
+
+  if (error.message === "passkey_origin_invalid") {
+    return "Passkey request origin is not allowed.";
+  }
+
+  if (error.message === "passkey_credential_invalid") {
+    return "Passkey credential verification failed.";
+  }
+
+  if (error.message === "passkey_credential_not_found") {
+    return "The selected passkey credential was not found.";
+  }
+
+  if (error.message === "passkey_credential_exists") {
+    return "This passkey credential is already registered.";
+  }
+
+  if (error.message === "passkey_label_invalid") {
+    return "Passkey label must be between 1 and 80 characters.";
+  }
+
+  if (error.message === "passkey_policy_invalid") {
+    return "Passkey policy value is invalid.";
+  }
+
+  if (error.message === "passkey_verification_required") {
+    return "Passkey verification is required for admin actions. Sign in again with passkey.";
+  }
+
   if (
     error.message === "invalid_access_token" ||
     error.message === "missing_bearer_token" ||
@@ -358,11 +409,22 @@ export function AdminPage() {
   const [dashboardState, setDashboardState] =
     useState<DashboardState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authUser, setAuthUser] = useState<AuthProfile | null>(null);
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [reservations, setReservations] = useState<AdminReservationItem[]>([]);
   const [reservationMeta, setReservationMeta] =
     useState<AdminReservationsMeta | null>(null);
+  const [passkeyCredentials, setPasskeyCredentials] = useState<
+    PasskeyCredentialItem[]
+  >([]);
+  const [credentialLabelDrafts, setCredentialLabelDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [isPasskeyPolicyEnabled, setPasskeyPolicyEnabled] = useState(false);
+  const [isPolicyUpdating, setPolicyUpdating] = useState(false);
+  const [credentialActionId, setCredentialActionId] = useState<string | null>(
+    null,
+  );
   const [reloadNonce, setReloadNonce] = useState(0);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [reservationPage, setReservationPage] = useState(1);
@@ -380,6 +442,9 @@ export function AdminPage() {
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(
     null,
   );
+  const [actionSuccessMessage, setActionSuccessMessage] = useState<
+    string | null
+  >(null);
   const [isActionSubmitting, setActionSubmitting] = useState(false);
 
   useEffect(() => {
@@ -398,7 +463,7 @@ export function AdminPage() {
         return;
       }
 
-      let userProfile: AuthUser | null = null;
+      let userProfile: AuthProfile | null = null;
       let validAccessToken = session.accessToken;
 
       try {
@@ -417,8 +482,8 @@ export function AdminPage() {
               expiresIn: refreshed.expires_in,
               user: refreshed.user,
             });
-            userProfile = refreshed.user;
             validAccessToken = refreshed.access_token;
+            userProfile = await fetchAuthenticatedUser(validAccessToken);
           } catch {
             clearAuthSession();
             if (isMounted) {
@@ -438,7 +503,12 @@ export function AdminPage() {
       }
 
       try {
-        const [eventsPayload, reservationsPayload] = await Promise.all([
+        const [
+          eventsPayload,
+          reservationsPayload,
+          passkeyPolicyPayload,
+          passkeyCredentialsPayload,
+        ] = await Promise.all([
           fetchAdminEvents(validAccessToken),
           fetchAdminReservations(validAccessToken, {
             page: reservationPage,
@@ -450,6 +520,8 @@ export function AdminPage() {
                 : undefined,
             query: reservationSearchQuery,
           }),
+          fetchPasskeyPolicy(validAccessToken),
+          fetchPasskeyCredentials(validAccessToken),
         ]);
 
         if (!isMounted) {
@@ -460,14 +532,40 @@ export function AdminPage() {
         setEvents(eventsPayload);
         setReservations(reservationsPayload.items);
         setReservationMeta(reservationsPayload.meta);
+        setPasskeyPolicyEnabled(
+          passkeyPolicyPayload.require_passkey_after_password_login,
+        );
+        setPasskeyCredentials(passkeyCredentialsPayload.items);
+        setCredentialLabelDrafts(
+          passkeyCredentialsPayload.items.reduce<Record<string, string>>(
+            (accumulator, credential) => {
+              accumulator[credential.id] = credential.label;
+              return accumulator;
+            },
+            {},
+          ),
+        );
         if (reservationsPayload.meta.page !== reservationPage) {
           setReservationPage(reservationsPayload.meta.page);
         }
         setAccessToken(validAccessToken);
         setActionErrorMessage(null);
+        setActionSuccessMessage(null);
         setDashboardState("ready");
-      } catch {
+      } catch (error) {
         if (!isMounted) {
+          return;
+        }
+
+        if (
+          error instanceof Error &&
+          error.message === "passkey_verification_required"
+        ) {
+          clearAuthSession();
+          setErrorMessage(
+            "Passkey verification is required for admin access. Sign in again with your passkey.",
+          );
+          setDashboardState("unauthenticated");
           return;
         }
 
@@ -490,7 +588,8 @@ export function AdminPage() {
   ]);
 
   const metrics = useMemo(
-    () => buildMetrics(events, reservationMeta?.total_items ?? reservations.length),
+    () =>
+      buildMetrics(events, reservationMeta?.total_items ?? reservations.length),
     [events, reservationMeta, reservations.length],
   );
   const recentEvents = useMemo(() => buildRecentEvents(events), [events]);
@@ -518,7 +617,8 @@ export function AdminPage() {
 
   const canGoToPreviousReservationPage = (reservationMeta?.page ?? 1) > 1;
   const canGoToNextReservationPage =
-    reservationMeta !== null && reservationMeta.page < reservationMeta.total_pages;
+    reservationMeta !== null &&
+    reservationMeta.page < reservationMeta.total_pages;
 
   const runWithFreshAccessToken = async <T,>(
     operation: (token: string) => Promise<T>,
@@ -535,6 +635,18 @@ export function AdminPage() {
     try {
       return await operation(token);
     } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "passkey_verification_required"
+      ) {
+        clearAuthSession();
+        setErrorMessage(
+          "Passkey verification is required for admin access. Sign in again with your passkey.",
+        );
+        setDashboardState("unauthenticated");
+        throw error;
+      }
+
       if (
         !(error instanceof Error) ||
         error.message !== "invalid_access_token"
@@ -619,6 +731,7 @@ export function AdminPage() {
 
     setActionSubmitting(true);
     setActionErrorMessage(null);
+    setActionSuccessMessage(null);
 
     try {
       if (editorMode === "create") {
@@ -647,6 +760,7 @@ export function AdminPage() {
 
     setActionSubmitting(true);
     setActionErrorMessage(null);
+    setActionSuccessMessage(null);
 
     try {
       await runWithFreshAccessToken((token) =>
@@ -668,6 +782,7 @@ export function AdminPage() {
 
     setActionSubmitting(true);
     setActionErrorMessage(null);
+    setActionSuccessMessage(null);
 
     try {
       await runWithFreshAccessToken((token) =>
@@ -678,6 +793,153 @@ export function AdminPage() {
       setActionErrorMessage(mapCrudErrorMessage(error));
     } finally {
       setActionSubmitting(false);
+    }
+  };
+
+  const buildPasskeyClientData = (
+    type: "webauthn.get" | "webauthn.create",
+    challenge: string,
+  ) => ({
+    type,
+    challenge,
+    origin: window.location.origin,
+  });
+
+  const handlePasskeyEnrollment = async () => {
+    const generatedCredentialId = `demo-passkey-${Date.now().toString(36)}`;
+
+    setActionSubmitting(true);
+    setActionErrorMessage(null);
+    setActionSuccessMessage(null);
+
+    try {
+      const registrationOptions = await runWithFreshAccessToken((token) =>
+        fetchPasskeyRegistrationOptions(token, "Admin Dashboard Passkey"),
+      );
+
+      const registrationResult = await runWithFreshAccessToken((token) =>
+        verifyPasskeyRegistration(token, {
+          challenge: registrationOptions.challenge,
+          credential_id: generatedCredentialId,
+          label: "Admin Dashboard Passkey",
+          client_data: buildPasskeyClientData(
+            "webauthn.create",
+            registrationOptions.challenge,
+          ),
+        }),
+      );
+
+      setActionSuccessMessage(
+        `Passkey enrolled. Total credentials: ${registrationResult.total_credentials}.`,
+      );
+      setReloadNonce((previous) => previous + 1);
+    } catch (error) {
+      setActionErrorMessage(mapCrudErrorMessage(error));
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
+  const handleTogglePasskeyPolicy = async () => {
+    setPolicyUpdating(true);
+    setActionErrorMessage(null);
+    setActionSuccessMessage(null);
+
+    try {
+      const nextPolicyValue = !isPasskeyPolicyEnabled;
+      const policyResponse = await runWithFreshAccessToken((token) =>
+        updatePasskeyPolicy(token, nextPolicyValue),
+      );
+
+      setPasskeyPolicyEnabled(
+        policyResponse.require_passkey_after_password_login,
+      );
+      setActionSuccessMessage(
+        policyResponse.require_passkey_after_password_login
+          ? "Passkey is now required after password login for this admin account."
+          : "Password-only login is allowed again for this admin account.",
+      );
+    } catch (error) {
+      setActionErrorMessage(mapCrudErrorMessage(error));
+    } finally {
+      setPolicyUpdating(false);
+    }
+  };
+
+  const handleCredentialLabelChange = (
+    credentialId: string,
+    nextLabel: string,
+  ) => {
+    setCredentialLabelDrafts((current) => ({
+      ...current,
+      [credentialId]: nextLabel,
+    }));
+  };
+
+  const handleRenameCredential = async (credentialId: string) => {
+    const nextLabel = (credentialLabelDrafts[credentialId] ?? "").trim();
+    if (nextLabel.length === 0 || nextLabel.length > 80) {
+      setActionErrorMessage(
+        "Passkey label must be between 1 and 80 characters.",
+      );
+      return;
+    }
+
+    setCredentialActionId(credentialId);
+    setActionErrorMessage(null);
+    setActionSuccessMessage(null);
+
+    try {
+      const updatedCredential = await runWithFreshAccessToken((token) =>
+        renamePasskeyCredential(token, credentialId, nextLabel),
+      );
+
+      setPasskeyCredentials((current) =>
+        current.map((credential) =>
+          credential.id === credentialId
+            ? { ...credential, label: updatedCredential.label }
+            : credential,
+        ),
+      );
+      setCredentialLabelDrafts((current) => ({
+        ...current,
+        [credentialId]: updatedCredential.label,
+      }));
+      setActionSuccessMessage("Passkey label updated.");
+    } catch (error) {
+      setActionErrorMessage(mapCrudErrorMessage(error));
+    } finally {
+      setCredentialActionId(null);
+    }
+  };
+
+  const handleRevokeCredential = async (credentialId: string) => {
+    if (!window.confirm("Revoke this passkey credential?")) {
+      return;
+    }
+
+    setCredentialActionId(credentialId);
+    setActionErrorMessage(null);
+    setActionSuccessMessage(null);
+
+    try {
+      await runWithFreshAccessToken((token) =>
+        revokePasskeyCredential(token, credentialId),
+      );
+
+      setPasskeyCredentials((current) =>
+        current.filter((credential) => credential.id !== credentialId),
+      );
+      setCredentialLabelDrafts((current) => {
+        const next = { ...current };
+        delete next[credentialId];
+        return next;
+      });
+      setActionSuccessMessage("Passkey credential revoked.");
+    } catch (error) {
+      setActionErrorMessage(mapCrudErrorMessage(error));
+    } finally {
+      setCredentialActionId(null);
     }
   };
 
@@ -726,7 +988,7 @@ export function AdminPage() {
     return (
       <section className="section-block admin-shell">
         <p className="home-api-state home-api-state-error" role="alert">
-          Please sign in to access the admin dashboard.
+          {errorMessage ?? "Please sign in to access the admin dashboard."}
         </p>
         <div className="admin-state-actions">
           <Link to="/login" className="button-primary">
@@ -781,6 +1043,14 @@ export function AdminPage() {
           >
             Create Event
           </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => void handlePasskeyEnrollment()}
+            disabled={isActionSubmitting}
+          >
+            Enroll Passkey
+          </button>
           <input
             type="search"
             className="admin-search-input"
@@ -796,6 +1066,12 @@ export function AdminPage() {
       {actionErrorMessage ? (
         <p className="home-api-state home-api-state-error" role="alert">
           {actionErrorMessage}
+        </p>
+      ) : null}
+
+      {actionSuccessMessage ? (
+        <p className="home-api-state home-api-state-success" role="status">
+          {actionSuccessMessage}
         </p>
       ) : null}
 
@@ -1034,6 +1310,92 @@ export function AdminPage() {
         </article>
 
         <aside className="admin-side-stack">
+          <article className="admin-passkey-card">
+            <header className="admin-passkey-head">
+              <h2>Passkey Security</h2>
+              <small>{passkeyCredentials.length} credentials</small>
+            </header>
+
+            <p className="admin-passkey-copy">
+              Current session: {authUser?.auth_method ?? "unknown"}. Admin
+              policy is
+              {isPasskeyPolicyEnabled
+                ? " requiring passkey after password login."
+                : " allowing password-only login."}
+            </p>
+
+            <button
+              type="button"
+              className="button-secondary wide"
+              onClick={() => void handleTogglePasskeyPolicy()}
+              disabled={isPolicyUpdating || isActionSubmitting}
+            >
+              {isPolicyUpdating
+                ? "Updating policy..."
+                : isPasskeyPolicyEnabled
+                  ? "Disable passkey-required policy"
+                  : "Require passkey after password login"}
+            </button>
+
+            {passkeyCredentials.length > 0 ? (
+              <ul className="admin-passkey-credential-list">
+                {passkeyCredentials.map((credential) => (
+                  <li
+                    key={credential.id}
+                    className="admin-passkey-credential-item"
+                  >
+                    <label>
+                      Label
+                      <input
+                        type="text"
+                        value={
+                          credentialLabelDrafts[credential.id] ??
+                          credential.label
+                        }
+                        maxLength={80}
+                        onChange={(event) =>
+                          handleCredentialLabelChange(
+                            credential.id,
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </label>
+                    <small>{credential.id}</small>
+                    <div className="admin-row-actions">
+                      <button
+                        type="button"
+                        className="admin-row-action-button"
+                        onClick={() =>
+                          void handleRenameCredential(credential.id)
+                        }
+                        disabled={credentialActionId === credential.id}
+                      >
+                        {credentialActionId === credential.id
+                          ? "Saving..."
+                          : "Save label"}
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-row-action-button admin-row-action-danger"
+                        onClick={() =>
+                          void handleRevokeCredential(credential.id)
+                        }
+                        disabled={credentialActionId === credential.id}
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="home-api-state">
+                No passkeys registered yet. Use Enroll Passkey to add one.
+              </p>
+            )}
+          </article>
+
           <article className="admin-reservations-card">
             <header className="admin-reservations-head">
               <h2>Reservation Queue</h2>
@@ -1077,7 +1439,9 @@ export function AdminPage() {
                 <input
                   type="search"
                   value={reservationQueryInput}
-                  onChange={(event) => setReservationQueryInput(event.target.value)}
+                  onChange={(event) =>
+                    setReservationQueryInput(event.target.value)
+                  }
                   placeholder="Search name, email, event"
                   aria-label="Search reservations"
                 />
@@ -1157,9 +1521,7 @@ export function AdminPage() {
                 <button
                   type="button"
                   className="admin-row-action-button"
-                  onClick={() =>
-                    setReservationPage((current) => current + 1)
-                  }
+                  onClick={() => setReservationPage((current) => current + 1)}
                   disabled={!canGoToNextReservationPage}
                 >
                   Next

@@ -14,12 +14,14 @@ final class JwtTokenService
     /**
      * @param array{email: string, display_name: string, roles: list<string>} $user
      */
-    public function createAccessToken(array $user): string
+    public function createAccessToken(array $user, string $authMethod = 'password', bool $passkeyVerified = false): string
     {
         return $this->encode([
             'sub' => $user['email'],
             'name' => $user['display_name'],
             'roles' => $user['roles'],
+            'auth_method' => $authMethod,
+            'passkey_verified' => $passkeyVerified,
             'token_type' => 'access',
             'jti' => bin2hex(random_bytes(8)),
             'iat' => time(),
@@ -30,12 +32,14 @@ final class JwtTokenService
     /**
      * @param array{email: string, display_name: string, roles: list<string>} $user
      */
-    public function createRefreshToken(array $user): string
+    public function createRefreshToken(array $user, string $authMethod = 'password', bool $passkeyVerified = false): string
     {
         return $this->encode([
             'sub' => $user['email'],
             'name' => $user['display_name'],
             'roles' => $user['roles'],
+            'auth_method' => $authMethod,
+            'passkey_verified' => $passkeyVerified,
             'token_type' => 'refresh',
             'jti' => bin2hex(random_bytes(8)),
             'iat' => time(),
@@ -44,7 +48,7 @@ final class JwtTokenService
     }
 
     /**
-     * @return array{sub: string, name: string, roles: list<string>, token_type: string, jti: string, iat: int, exp: int}|null
+     * @return array{sub: string, name: string, roles: list<string>, auth_method: string, passkey_verified: bool, token_type: string, jti: string, iat: int, exp: int}|null
      */
     public function parseAndValidate(string $token, string $expectedType): ?array
     {
@@ -106,11 +110,15 @@ final class JwtTokenService
 
         /** @var list<string> $roles */
         $roles = array_values(array_filter($payload['roles'], 'is_string'));
+        $authMethod = is_string($payload['auth_method'] ?? null) ? $payload['auth_method'] : 'password';
+        $passkeyVerified = true === ($payload['passkey_verified'] ?? false);
 
         return [
             'sub' => $payload['sub'],
             'name' => $payload['name'],
             'roles' => $roles,
+            'auth_method' => $authMethod,
+            'passkey_verified' => $passkeyVerified,
             'token_type' => $payload['token_type'],
             'jti' => $payload['jti'],
             'iat' => $payload['iat'],

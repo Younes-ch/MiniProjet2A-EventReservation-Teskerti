@@ -16,6 +16,10 @@ parameters:
         - email: 'alex@example.com'
           credential_id: 'demo-passkey-alex-2026'
           label: 'Alex MacBook Touch ID'
+    app.passkey_policy_default_require_after_password_login: false
+    app.passkey_allowed_origins:
+        - 'http://localhost:5173'
+        - 'http://localhost:8080'
 
 services:
     # default configuration for services in *this* file
@@ -35,6 +39,7 @@ services:
     App\Auth\InMemoryPasskeyCredentialStore:
         arguments:
             $seedCredentials: '%app.passkey_credentials%'
+            $cachePool: '@cache.app'
 
     App\Auth\InMemoryPasskeyChallengeStore:
         arguments:
@@ -44,11 +49,20 @@ services:
         arguments:
             $cachePool: '@cache.app'
 
+    App\Auth\InMemoryPasskeyPolicyStore:
+        arguments:
+            $cachePool: '@cache.app'
+            $defaultRequireAfterPassword: '%app.passkey_policy_default_require_after_password_login%'
+
     App\Auth\JwtTokenService:
         arguments:
             $secret: '%env(string:JWT_SECRET)%'
             $accessTokenTtl: '%env(int:JWT_ACCESS_TOKEN_TTL)%'
             $refreshTokenTtl: '%env(int:JWT_REFRESH_TOKEN_TTL)%'
+
+    App\Controller\AuthController:
+        arguments:
+            $passkeyAllowedOrigins: '%app.passkey_allowed_origins%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
