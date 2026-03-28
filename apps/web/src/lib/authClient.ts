@@ -4,12 +4,28 @@ export type AuthUser = {
   roles: string[];
 };
 
-export type AuthLoginResponse = {
+export type AuthTokenResponse = {
   access_token: string;
   refresh_token: string;
   token_type: string;
   expires_in: number;
+  auth_method: string;
+  passkey_verified: boolean;
   user: AuthUser;
+};
+
+export type PasswordLoginResponse =
+  | AuthTokenResponse
+  | {
+      requires_passkey: true;
+      user: AuthUser;
+      passkey_options: PasskeyOptionsResponse;
+    };
+
+export type AuthProfile = AuthUser & {
+  auth_method: string;
+  passkey_verified: boolean;
+  passkey_required_after_password_login: boolean;
 };
 
 export type PasskeyAllowedCredential = {
@@ -29,6 +45,13 @@ export type PasskeyVerifyPayload = {
   email: string;
   challenge: string;
   credential_id: string;
+  client_data: PasskeyClientData;
+};
+
+export type PasskeyClientData = {
+  type: "webauthn.get" | "webauthn.create";
+  challenge: string;
+  origin: string;
 };
 
 export type PasskeyRegistrationOptionsResponse = {
@@ -47,6 +70,7 @@ export type PasskeyRegistrationVerifyPayload = {
   challenge: string;
   credential_id: string;
   label?: string;
+  client_data: PasskeyClientData;
 };
 
 export type PasskeyRegistrationVerifyResponse = {
@@ -57,6 +81,20 @@ export type PasskeyRegistrationVerifyResponse = {
     label: string;
   };
   total_credentials: number;
+};
+
+export type PasskeyCredentialItem = {
+  id: string;
+  type: string;
+  label: string;
+};
+
+export type PasskeyCredentialsResponse = {
+  items: PasskeyCredentialItem[];
+};
+
+export type PasskeyPolicyResponse = {
+  require_passkey_after_password_login: boolean;
 };
 
 type LogoutResponse = {
@@ -107,13 +145,13 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
 };
 
 export const loginWithPassword = (payload: LoginPayload) =>
-  requestJson<AuthLoginResponse>("/api/auth/login", {
+  requestJson<PasswordLoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 
 export const refreshAccessToken = (refreshToken: string) =>
-  requestJson<AuthLoginResponse>("/api/auth/refresh", {
+  requestJson<AuthTokenResponse>("/api/auth/refresh", {
     method: "POST",
     body: JSON.stringify({
       refresh_token: refreshToken,
@@ -121,7 +159,7 @@ export const refreshAccessToken = (refreshToken: string) =>
   });
 
 export const fetchAuthenticatedUser = (accessToken: string) =>
-  requestJson<AuthUser>("/api/auth/me", {
+  requestJson<AuthProfile>("/api/auth/me", {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -145,7 +183,7 @@ export const fetchPasskeyOptions = (email: string) =>
   });
 
 export const verifyPasskeyLogin = (payload: PasskeyVerifyPayload) =>
-  requestJson<AuthLoginResponse>("/api/auth/passkey/verify", {
+  requestJson<AuthTokenResponse>("/api/auth/passkey/verify", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -181,3 +219,63 @@ export const verifyPasskeyRegistration = (
       body: JSON.stringify(payload),
     },
   );
+
+export const fetchPasskeyCredentials = (accessToken: string) =>
+  requestJson<PasskeyCredentialsResponse>("/api/auth/passkey/credentials", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+export const renamePasskeyCredential = (
+  accessToken: string,
+  credentialId: string,
+  label: string,
+) =>
+  requestJson<PasskeyCredentialItem>(
+    `/api/auth/passkey/credentials/${encodeURIComponent(credentialId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ label }),
+    },
+  );
+
+export const revokePasskeyCredential = (
+  accessToken: string,
+  credentialId: string,
+) =>
+  requestJson<{ status: string; total_credentials: number }>(
+    `/api/auth/passkey/credentials/${encodeURIComponent(credentialId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+export const fetchPasskeyPolicy = (accessToken: string) =>
+  requestJson<PasskeyPolicyResponse>("/api/auth/passkey/policy", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+export const updatePasskeyPolicy = (
+  accessToken: string,
+  requirePasskeyAfterPasswordLogin: boolean,
+) =>
+  requestJson<PasskeyPolicyResponse>("/api/auth/passkey/policy", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      require_passkey_after_password_login: requirePasskeyAfterPasswordLogin,
+    }),
+  });
