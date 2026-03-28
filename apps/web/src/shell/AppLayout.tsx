@@ -1,7 +1,7 @@
-import { NavLink, Outlet, type NavLinkRenderProps } from 'react-router-dom'
+import { NavLink, Outlet, type NavLinkRenderProps } from "react-router-dom";
 
 const getNavClass = ({ isActive }: NavLinkRenderProps) =>
-  isActive ? 'nav-link nav-link-active' : 'nav-link'
+  isActive ? "nav-link nav-link-active" : "nav-link";
 
 export function AppLayout() {
   return (
@@ -28,5 +28,5 @@ export function AppLayout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }

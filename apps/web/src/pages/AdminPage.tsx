@@ -1,8 +1,8 @@
 const metrics = [
-  { label: 'Total events', value: '142' },
-  { label: 'Total reservations', value: '3,892' },
-  { label: 'Upcoming events', value: '24' },
-]
+  { label: "Total events", value: "142" },
+  { label: "Total reservations", value: "3,892" },
+  { label: "Upcoming events", value: "24" },
+];
 
 export function AdminPage() {
   return (
@@ -42,5 +42,5 @@ export function AdminPage() {
         </div>
       </article>
     </section>
-  )
+  );
 }

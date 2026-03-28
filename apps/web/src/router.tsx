@@ -1,12 +1,12 @@
-import { createBrowserRouter } from 'react-router-dom'
-import { AdminPage } from './pages/AdminPage'
-import { HomePage } from './pages/HomePage'
-import { LoginPage } from './pages/LoginPage'
-import { AppLayout } from './shell/AppLayout'
+import { createBrowserRouter } from "react-router-dom";
+import { AdminPage } from "./pages/AdminPage";
+import { HomePage } from "./pages/HomePage";
+import { LoginPage } from "./pages/LoginPage";
+import { AppLayout } from "./shell/AppLayout";
 
 export const router = createBrowserRouter([
   {
-    path: '/',
+    path: "/",
     element: <AppLayout />,
     children: [
       {
@@ -14,13 +14,13 @@ export const router = createBrowserRouter([
         element: <HomePage />,
       },
       {
-        path: 'login',
+        path: "login",
         element: <LoginPage />,
       },
       {
-        path: 'admin',
+        path: "admin",
         element: <AdminPage />,
       },
     ],
   },
-])
+]);

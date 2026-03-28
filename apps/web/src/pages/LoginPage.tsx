@@ -29,5 +29,5 @@ export function LoginPage() {
         </form>
       </article>
     </section>
-  )
+  );
 }

@@ -1,23 +1,23 @@
 const featuredEvents = [
   {
-    title: 'Midnight Resonance 2.0',
-    venue: 'The Warehouse District',
-    price: '$45.00',
-    badge: '82 seats available',
+    title: "Midnight Resonance 2.0",
+    venue: "The Warehouse District",
+    price: "$45.00",
+    badge: "82 seats available",
   },
   {
-    title: 'Ephemeral Visions Gallery',
-    venue: 'Skyline Atrium',
-    price: '$120.00',
-    badge: '12 seats left',
+    title: "Ephemeral Visions Gallery",
+    venue: "Skyline Atrium",
+    price: "$120.00",
+    badge: "12 seats left",
   },
   {
-    title: 'Future Loop: AI 2024',
-    venue: 'Innovation Hub',
-    price: '$299.00',
-    badge: 'Sold out soon',
+    title: "Future Loop: AI 2024",
+    venue: "Innovation Hub",
+    price: "$299.00",
+    badge: "Sold out soon",
   },
-]
+];
 
 export function HomePage() {
   return (
@@ -49,8 +49,8 @@ export function HomePage() {
       <section className="section-block">
         <h2>Upcoming experiences</h2>
         <p className="section-copy">
-          Cards remain static in Phase 0 and will switch to backend data in Phase
-          1.
+          Cards remain static in Phase 0 and will switch to backend data in
+          Phase 1.
         </p>
         <div className="event-grid">
           {featuredEvents.map((event) => (
@@ -64,5 +64,5 @@ export function HomePage() {
         </div>
       </section>
     </>
-  )
+  );
 }
