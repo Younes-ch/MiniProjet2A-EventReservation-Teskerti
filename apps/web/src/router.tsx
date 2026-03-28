@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AdminPage } from "./pages/AdminPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
+import { EventDetailPage } from "./pages/EventDetailPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReservationPage } from "./pages/ReservationPage";
@@ -15,6 +16,10 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <HomePage />,
+      },
+      {
+        path: "events/:eventSlug",
+        element: <EventDetailPage />,
       },
       {
         path: "login",

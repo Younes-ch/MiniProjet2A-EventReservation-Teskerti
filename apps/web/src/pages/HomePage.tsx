@@ -1,52 +1,84 @@
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-
-type FeaturedEvent = {
-  title: string;
-  category: string;
-  venue: string;
-  price: string;
-  badge: string;
-  month: string;
-  day: string;
-  toneClass: string;
-};
-
-const featuredEvents: FeaturedEvent[] = [
-  {
-    title: "Midnight Resonance 2.0",
-    category: "Electronic Fusion",
-    venue: "The Warehouse District",
-    price: "$45.00",
-    badge: "82 seats available",
-    month: "OCT",
-    day: "12",
-    toneClass: "home-event-tone-indigo",
-  },
-  {
-    title: "Ephemeral Visions Gallery",
-    category: "Modern Art",
-    venue: "Skyline Atrium",
-    price: "$120.00",
-    badge: "12 seats left",
-    month: "OCT",
-    day: "15",
-    toneClass: "home-event-tone-cyan",
-  },
-  {
-    title: "Future Loop: AI 2024",
-    category: "Tech Summit",
-    venue: "Innovation Hub",
-    price: "$299.00",
-    badge: "Sold out soon",
-    month: "OCT",
-    day: "18",
-    toneClass: "home-event-tone-amber",
-  },
-];
+import { fetchPublicEvents, type PublicEvent } from "../lib/eventsClient";
 
 const communityMembers = ["AK", "RM", "CN", "+126"];
 
+const toneClassByToken: Record<string, string> = {
+  indigo: "home-event-tone-indigo",
+  cyan: "home-event-tone-cyan",
+  amber: "home-event-tone-amber",
+};
+
+const getToneClass = (event: PublicEvent): string =>
+  toneClassByToken[event.visual_tone] ?? "home-event-tone-indigo";
+
+const formatEventPrice = (event: PublicEvent): string => {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: event.currency,
+      maximumFractionDigits: 2,
+    }).format(event.price_amount);
+  } catch {
+    return `$${event.price_amount.toFixed(2)}`;
+  }
+};
+
+const buildAvailabilityBadge = (event: PublicEvent): string => {
+  if (event.seats_available <= 0) {
+    return "Sold out";
+  }
+
+  if (event.seats_available <= 15) {
+    return `${event.seats_available} seats left`;
+  }
+
+  return `${event.seats_available} seats available`;
+};
+
+const buildDateBadge = (event: PublicEvent): { month: string; day: string } => {
+  const parsedDate = new Date(event.starts_at);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return {
+      month: "TBD",
+      day: "--",
+    };
+  }
+
+  return {
+    month: parsedDate.toLocaleString("en-US", { month: "short" }).toUpperCase(),
+    day: parsedDate.toLocaleString("en-US", { day: "2-digit" }),
+  };
+};
+
 export function HomePage() {
+  const [events, setEvents] = useState<PublicEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadEvents = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const payload = await fetchPublicEvents();
+      setEvents(payload);
+    } catch {
+      setLoadError("Unable to load events right now. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadEvents();
+  }, [loadEvents]);
+
+  const firstEventSlug = events[0]?.slug;
+  const exploreTarget = firstEventSlug ? `/events/${firstEventSlug}` : "/reserve";
+
   return (
     <>
       <section className="home-hero" aria-labelledby="home-heading">
@@ -59,10 +91,10 @@ export function HomePage() {
             workshops. Your next unforgettable memory starts here.
           </p>
           <div className="home-hero-actions">
-            <Link to="/reserve" className="button-primary home-explore-link">
+            <Link to={exploreTarget} className="button-primary home-explore-link">
               Explore now
             </Link>
-            <button type="button" className="button-secondary">
+            <button type="button" className="button-secondary" disabled>
               How it works
             </button>
           </div>
@@ -111,7 +143,7 @@ export function HomePage() {
         <div className="home-events-head">
           <div>
             <h2 id="upcoming-events-heading">Upcoming experiences</h2>
-            <p>Handpicked events happening in your area this week.</p>
+            <p>Live events streamed from the API.</p>
           </div>
           <div className="home-events-controls">
             <button type="button" aria-label="Previous featured events">
@@ -123,38 +155,72 @@ export function HomePage() {
           </div>
         </div>
 
-        <div className="home-event-grid">
-          {featuredEvents.map((event) => (
-            <article key={event.title} className="home-event-card">
-              <header className={`home-event-media ${event.toneClass}`}>
-                <span>{event.badge}</span>
-                <small>
-                  <strong>{event.month}</strong>
-                  {event.day}
-                </small>
-              </header>
-              <div className="home-event-body">
-                <p>{event.category}</p>
-                <h3>{event.title}</h3>
-                <div>
-                  <span>{event.venue}</span>
-                  <strong>{event.price}</strong>
-                </div>
-                <button
-                  type="button"
-                  className="home-event-arrow"
-                  aria-label={`Open ${event.title}`}
-                >
-                  &#8594;
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
+        {isLoading ? (
+          <p className="home-api-state" role="status">
+            Loading events...
+          </p>
+        ) : loadError ? (
+          <div className="home-api-state-row">
+            <p className="home-api-state home-api-state-error" role="alert">
+              {loadError}
+            </p>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => void loadEvents()}
+            >
+              Retry
+            </button>
+          </div>
+        ) : events.length > 0 ? (
+          <div className="home-event-grid">
+            {events.map((event) => {
+              const dateBadge = buildDateBadge(event);
+
+              return (
+                <article key={event.id} className="home-event-card">
+                  <header className={`home-event-media ${getToneClass(event)}`}>
+                    <span>{buildAvailabilityBadge(event)}</span>
+                    <small>
+                      <strong>{dateBadge.month}</strong>
+                      {dateBadge.day}
+                    </small>
+                  </header>
+                  <div className="home-event-body">
+                    <p>{event.category}</p>
+                    <h3>{event.title}</h3>
+                    <div>
+                      <span>
+                        {event.location}, {event.city}
+                      </span>
+                      <strong>{formatEventPrice(event)}</strong>
+                    </div>
+                    <Link
+                      to={`/events/${event.slug}`}
+                      className="home-event-arrow"
+                      aria-label={`Open ${event.title}`}
+                    >
+                      &#8594;
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="home-api-state" role="status">
+            No events are available yet.
+          </p>
+        )}
 
         <div className="home-events-more">
-          <button type="button" className="button-secondary">
-            Load more events
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => void loadEvents()}
+            disabled={isLoading}
+          >
+            {isLoading ? "Refreshing..." : "Refresh events"}
           </button>
         </div>
       </section>
