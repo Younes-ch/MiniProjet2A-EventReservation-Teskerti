@@ -77,6 +77,79 @@ final class InMemoryPasskeyCredentialStore
         return false;
     }
 
+    /**
+     * @return list<array{id: string, type: string, label: string}>
+     */
+    public function listCredentialsByEmail(string $email): array
+    {
+        $normalizedEmail = strtolower(trim($email));
+        $credentials = $this->loadCredentialsByEmail($normalizedEmail);
+
+        return array_values(array_map(
+            static fn (array $credential): array => [
+                'id' => (string) ($credential['credential_id'] ?? ''),
+                'type' => 'public-key',
+                'label' => (string) ($credential['label'] ?? ''),
+            ],
+            $credentials,
+        ));
+    }
+
+    public function renameCredential(string $email, string $credentialId, string $label): bool
+    {
+        $normalizedEmail = strtolower(trim($email));
+        $normalizedCredentialId = trim($credentialId);
+        $normalizedLabel = trim($label);
+
+        if ('' === $normalizedEmail || '' === $normalizedCredentialId || '' === $normalizedLabel) {
+            return false;
+        }
+
+        $credentials = $this->loadCredentialsByEmail($normalizedEmail);
+        $updated = false;
+
+        foreach ($credentials as $index => $credential) {
+            if ($normalizedCredentialId === ($credential['credential_id'] ?? null)) {
+                $credentials[$index]['label'] = $normalizedLabel;
+                $updated = true;
+                break;
+            }
+        }
+
+        if (!$updated) {
+            return false;
+        }
+
+        $this->saveCredentialsByEmail($normalizedEmail, $credentials);
+
+        return true;
+    }
+
+    public function revokeCredential(string $email, string $credentialId): bool
+    {
+        $normalizedEmail = strtolower(trim($email));
+        $normalizedCredentialId = trim($credentialId);
+
+        if ('' === $normalizedEmail || '' === $normalizedCredentialId) {
+            return false;
+        }
+
+        $credentials = $this->loadCredentialsByEmail($normalizedEmail);
+
+        $filtered = array_values(array_filter(
+            $credentials,
+            static fn (array $credential): bool => ($credential['credential_id'] ?? null) !== $normalizedCredentialId,
+        ));
+
+        if (count($filtered) === count($credentials)) {
+            return false;
+        }
+
+        $this->saveCredentialsByEmail($normalizedEmail, $filtered);
+
+        return true;
+    }
+
     public function addCredential(string $email, string $credentialId, string $label = ''): void
     {
         $normalizedEmail = strtolower(trim($email));

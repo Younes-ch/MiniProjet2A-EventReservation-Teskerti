@@ -2,10 +2,11 @@
 
 namespace App\Controller;
 
+use App\Auth\InMemoryAuthUserStore;
 use App\Auth\InMemoryPasskeyChallengeStore;
 use App\Auth\InMemoryPasskeyCredentialStore;
+use App\Auth\InMemoryPasskeyPolicyStore;
 use App\Auth\InMemoryRefreshTokenRevocationStore;
-use App\Auth\InMemoryAuthUserStore;
 use App\Auth\JwtTokenService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -19,7 +20,10 @@ final class AuthController extends AbstractController
         private readonly InMemoryPasskeyCredentialStore $passkeyCredentialStore,
         private readonly InMemoryPasskeyChallengeStore $passkeyChallengeStore,
         private readonly InMemoryRefreshTokenRevocationStore $refreshTokenRevocationStore,
+        private readonly InMemoryPasskeyPolicyStore $passkeyPolicyStore,
         private readonly JwtTokenService $jwtTokenService,
+        /** @var list<string> */
+        private readonly array $passkeyAllowedOrigins,
     ) {
     }
 
@@ -49,7 +53,42 @@ final class AuthController extends AbstractController
             ], 401);
         }
 
-        return $this->json($this->buildAuthResponse($user));
+        $requiresPasskey = $this->passkeyPolicyStore->isPasskeyRequiredAfterPassword($email, $user['roles']);
+        if ($requiresPasskey) {
+            $allowCredentials = $this->passkeyCredentialStore->findAllowedCredentialsByEmail($email);
+            if ([] === $allowCredentials) {
+                return $this->json([
+                    'error' => 'passkey_required_but_not_registered',
+                ], 403);
+            }
+
+            $challenge = $this->passkeyChallengeStore->issueChallenge(
+                $email,
+                'login',
+                120,
+                [
+                    'allowed_credential_ids' => $this->extractCredentialIds($allowCredentials),
+                ],
+            );
+
+            return $this->json([
+                'requires_passkey' => true,
+                'user' => [
+                    'email' => $user['email'],
+                    'display_name' => $user['display_name'],
+                    'roles' => $user['roles'],
+                ],
+                'passkey_options' => [
+                    'challenge' => $challenge,
+                    'timeout' => 60000,
+                    'rp_id' => 'localhost',
+                    'user_verification' => 'preferred',
+                    'allow_credentials' => $allowCredentials,
+                ],
+            ]);
+        }
+
+        return $this->json($this->buildAuthResponse($user, 'password', false));
     }
 
     #[Route('/api/auth/refresh', name: 'api_auth_refresh', methods: ['POST'])]
@@ -89,7 +128,19 @@ final class AuthController extends AbstractController
             ], 401);
         }
 
-        return $this->json($this->buildAuthResponse($user));
+        $authMethod = (string) ($tokenPayload['auth_method'] ?? 'password');
+        $passkeyVerified = true === ($tokenPayload['passkey_verified'] ?? false);
+
+        if (
+            $this->passkeyPolicyStore->isPasskeyRequiredAfterPassword($user['email'], $user['roles'])
+            && !$passkeyVerified
+        ) {
+            return $this->json([
+                'error' => 'passkey_verification_required',
+            ], 403);
+        }
+
+        return $this->json($this->buildAuthResponse($user, $authMethod, $passkeyVerified));
     }
 
     #[Route('/api/auth/logout', name: 'api_auth_logout', methods: ['POST'])]
@@ -154,7 +205,14 @@ final class AuthController extends AbstractController
             ], 404);
         }
 
-        $challenge = $this->passkeyChallengeStore->issueChallenge($email, 'login');
+        $challenge = $this->passkeyChallengeStore->issueChallenge(
+            $email,
+            'login',
+            120,
+            [
+                'allowed_credential_ids' => $this->extractCredentialIds($allowCredentials),
+            ],
+        );
 
         return $this->json([
             'challenge' => $challenge,
@@ -178,11 +236,24 @@ final class AuthController extends AbstractController
         $email = strtolower(trim((string) ($payload['email'] ?? '')));
         $challenge = trim((string) ($payload['challenge'] ?? ''));
         $credentialId = trim((string) ($payload['credential_id'] ?? ''));
+        $clientData = $this->extractPasskeyClientData($payload, 'webauthn.get');
 
-        if ('' === $email || '' === $challenge || '' === $credentialId) {
+        if ('' === $email || '' === $challenge || '' === $credentialId || null === $clientData) {
             return $this->json([
                 'error' => 'passkey_payload_invalid',
             ], 400);
+        }
+
+        if ($clientData['challenge'] !== $challenge) {
+            return $this->json([
+                'error' => 'passkey_payload_invalid',
+            ], 400);
+        }
+
+        if (!$this->isAllowedPasskeyOrigin($clientData['origin'])) {
+            return $this->json([
+                'error' => 'passkey_origin_invalid',
+            ], 401);
         }
 
         $user = $this->userStore->findByEmail($email);
@@ -192,9 +263,21 @@ final class AuthController extends AbstractController
             ], 404);
         }
 
-        if (!$this->passkeyChallengeStore->consumeChallenge($email, $challenge, 'login')) {
+        $challengeEntry = $this->passkeyChallengeStore->consumeChallengeWithContext($email, $challenge, 'login');
+        if (null === $challengeEntry) {
             return $this->json([
                 'error' => 'passkey_challenge_invalid',
+            ], 401);
+        }
+
+        $allowedCredentialIds = $challengeEntry['context']['allowed_credential_ids'] ?? [];
+        if (
+            is_array($allowedCredentialIds)
+            && [] !== $allowedCredentialIds
+            && !in_array($credentialId, $allowedCredentialIds, true)
+        ) {
+            return $this->json([
+                'error' => 'passkey_credential_invalid',
             ], 401);
         }
 
@@ -204,7 +287,7 @@ final class AuthController extends AbstractController
             ], 401);
         }
 
-        return $this->json($this->buildAuthResponse($user));
+        return $this->json($this->buildAuthResponse($user, 'passkey', true));
     }
 
     #[Route('/api/auth/passkey/register/options', name: 'api_auth_passkey_register_options', methods: ['POST'])]
@@ -224,7 +307,16 @@ final class AuthController extends AbstractController
 
         $email = $claims['sub'];
         $label = trim((string) ($payload['label'] ?? ''));
-        $challenge = $this->passkeyChallengeStore->issueChallenge($email, 'register');
+        $excludeCredentials = $this->passkeyCredentialStore->findAllowedCredentialsByEmail($email);
+
+        $challenge = $this->passkeyChallengeStore->issueChallenge(
+            $email,
+            'register',
+            120,
+            [
+                'exclude_credential_ids' => $this->extractCredentialIds($excludeCredentials),
+            ],
+        );
 
         return $this->json([
             'challenge' => $challenge,
@@ -234,7 +326,7 @@ final class AuthController extends AbstractController
                 'email' => $claims['sub'],
                 'display_name' => $claims['name'],
             ],
-            'exclude_credentials' => $this->passkeyCredentialStore->findAllowedCredentialsByEmail($email),
+            'exclude_credentials' => $excludeCredentials,
             'label' => $label,
         ]);
     }
@@ -258,17 +350,38 @@ final class AuthController extends AbstractController
         $challenge = trim((string) ($payload['challenge'] ?? ''));
         $credentialId = trim((string) ($payload['credential_id'] ?? ''));
         $label = trim((string) ($payload['label'] ?? ''));
+        $clientData = $this->extractPasskeyClientData($payload, 'webauthn.create');
 
-        if ('' === $challenge || '' === $credentialId) {
+        if ('' === $challenge || '' === $credentialId || null === $clientData) {
             return $this->json([
                 'error' => 'passkey_payload_invalid',
             ], 400);
         }
 
-        if (!$this->passkeyChallengeStore->consumeChallenge($email, $challenge, 'register')) {
+        if ($clientData['challenge'] !== $challenge) {
+            return $this->json([
+                'error' => 'passkey_payload_invalid',
+            ], 400);
+        }
+
+        if (!$this->isAllowedPasskeyOrigin($clientData['origin'])) {
+            return $this->json([
+                'error' => 'passkey_origin_invalid',
+            ], 401);
+        }
+
+        $challengeEntry = $this->passkeyChallengeStore->consumeChallengeWithContext($email, $challenge, 'register');
+        if (null === $challengeEntry) {
             return $this->json([
                 'error' => 'passkey_challenge_invalid',
             ], 401);
+        }
+
+        $excludedCredentialIds = $challengeEntry['context']['exclude_credential_ids'] ?? [];
+        if (is_array($excludedCredentialIds) && in_array($credentialId, $excludedCredentialIds, true)) {
+            return $this->json([
+                'error' => 'passkey_credential_exists',
+            ], 409);
         }
 
         if ($this->passkeyCredentialStore->hasCredential($email, $credentialId)) {
@@ -291,6 +404,132 @@ final class AuthController extends AbstractController
         ]);
     }
 
+    #[Route('/api/auth/passkey/credentials', name: 'api_auth_passkey_credentials_list', methods: ['GET'])]
+    public function passkeyCredentialsList(Request $request): JsonResponse
+    {
+        $claims = $this->extractAccessTokenClaims($request);
+        if ($claims instanceof JsonResponse) {
+            return $claims;
+        }
+
+        return $this->json([
+            'items' => $this->passkeyCredentialStore->listCredentialsByEmail($claims['sub']),
+        ]);
+    }
+
+    #[Route('/api/auth/passkey/credentials/{credentialId}', name: 'api_auth_passkey_credentials_rename', methods: ['PATCH'])]
+    public function passkeyCredentialsRename(string $credentialId, Request $request): JsonResponse
+    {
+        $claims = $this->extractAccessTokenClaims($request);
+        if ($claims instanceof JsonResponse) {
+            return $claims;
+        }
+
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $label = trim((string) ($payload['label'] ?? ''));
+        if ('' === $label || strlen($label) > 80) {
+            return $this->json([
+                'error' => 'passkey_label_invalid',
+            ], 400);
+        }
+
+        if (!$this->passkeyCredentialStore->renameCredential($claims['sub'], $credentialId, $label)) {
+            return $this->json([
+                'error' => 'passkey_credential_not_found',
+            ], 404);
+        }
+
+        foreach ($this->passkeyCredentialStore->listCredentialsByEmail($claims['sub']) as $credential) {
+            if (($credential['id'] ?? null) === $credentialId) {
+                return $this->json($credential);
+            }
+        }
+
+        return $this->json([
+            'error' => 'passkey_credential_not_found',
+        ], 404);
+    }
+
+    #[Route('/api/auth/passkey/credentials/{credentialId}', name: 'api_auth_passkey_credentials_revoke', methods: ['DELETE'])]
+    public function passkeyCredentialsRevoke(string $credentialId, Request $request): JsonResponse
+    {
+        $claims = $this->extractAccessTokenClaims($request);
+        if ($claims instanceof JsonResponse) {
+            return $claims;
+        }
+
+        if (!$this->passkeyCredentialStore->revokeCredential($claims['sub'], $credentialId)) {
+            return $this->json([
+                'error' => 'passkey_credential_not_found',
+            ], 404);
+        }
+
+        return $this->json([
+            'status' => 'passkey_credential_revoked',
+            'total_credentials' => count($this->passkeyCredentialStore->findAllowedCredentialsByEmail($claims['sub'])),
+        ]);
+    }
+
+    #[Route('/api/auth/passkey/policy', name: 'api_auth_passkey_policy_get', methods: ['GET'])]
+    public function passkeyPolicyGet(Request $request): JsonResponse
+    {
+        $claims = $this->extractAccessTokenClaims($request);
+        if ($claims instanceof JsonResponse) {
+            return $claims;
+        }
+
+        if (!in_array('ROLE_ADMIN', $claims['roles'], true)) {
+            return $this->json([
+                'error' => 'insufficient_role',
+            ], 403);
+        }
+
+        return $this->json([
+            'require_passkey_after_password_login' => $this->passkeyPolicyStore->isPasskeyRequiredAfterPassword($claims['sub'], $claims['roles']),
+        ]);
+    }
+
+    #[Route('/api/auth/passkey/policy', name: 'api_auth_passkey_policy_update', methods: ['PATCH'])]
+    public function passkeyPolicyUpdate(Request $request): JsonResponse
+    {
+        $claims = $this->extractAccessTokenClaims($request);
+        if ($claims instanceof JsonResponse) {
+            return $claims;
+        }
+
+        if (!in_array('ROLE_ADMIN', $claims['roles'], true)) {
+            return $this->json([
+                'error' => 'insufficient_role',
+            ], 403);
+        }
+
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $required = $payload['require_passkey_after_password_login'] ?? null;
+        if (!is_bool($required)) {
+            return $this->json([
+                'error' => 'passkey_policy_invalid',
+            ], 400);
+        }
+
+        $this->passkeyPolicyStore->setPasskeyRequiredAfterPassword($claims['sub'], $claims['roles'], $required);
+
+        return $this->json([
+            'require_passkey_after_password_login' => $this->passkeyPolicyStore->isPasskeyRequiredAfterPassword($claims['sub'], $claims['roles']),
+        ]);
+    }
+
     #[Route('/api/auth/me', name: 'api_auth_me', methods: ['GET'])]
     public function me(Request $request): JsonResponse
     {
@@ -303,6 +542,9 @@ final class AuthController extends AbstractController
             'email' => $claims['sub'],
             'display_name' => $claims['name'],
             'roles' => $claims['roles'],
+            'auth_method' => $claims['auth_method'],
+            'passkey_verified' => $claims['passkey_verified'],
+            'passkey_required_after_password_login' => $this->passkeyPolicyStore->isPasskeyRequiredAfterPassword($claims['sub'], $claims['roles']),
         ]);
     }
 
@@ -310,13 +552,15 @@ final class AuthController extends AbstractController
      * @param array<string, mixed> $user
      * @return array<string, mixed>
      */
-    private function buildAuthResponse(array $user): array
+    private function buildAuthResponse(array $user, string $authMethod, bool $passkeyVerified): array
     {
         return [
-            'access_token' => $this->jwtTokenService->createAccessToken($user),
-            'refresh_token' => $this->jwtTokenService->createRefreshToken($user),
+            'access_token' => $this->jwtTokenService->createAccessToken($user, $authMethod, $passkeyVerified),
+            'refresh_token' => $this->jwtTokenService->createRefreshToken($user, $authMethod, $passkeyVerified),
             'token_type' => 'Bearer',
             'expires_in' => $this->jwtTokenService->getAccessTokenTtl(),
+            'auth_method' => $authMethod,
+            'passkey_verified' => $passkeyVerified,
             'user' => [
                 'email' => $user['email'],
                 'display_name' => $user['display_name'],
@@ -369,7 +613,7 @@ final class AuthController extends AbstractController
     }
 
     /**
-     * @return array{sub: string, name: string, roles: list<string>, token_type: string, jti: string, iat: int, exp: int}|JsonResponse
+    * @return array{sub: string, name: string, roles: list<string>, auth_method: string, passkey_verified: bool, token_type: string, jti: string, iat: int, exp: int}|JsonResponse
      */
     private function extractAccessTokenClaims(Request $request): array|JsonResponse
     {
@@ -388,6 +632,73 @@ final class AuthController extends AbstractController
             ], 401);
         }
 
-        return $claims;
+        return [
+            'sub' => $claims['sub'],
+            'name' => $claims['name'],
+            'roles' => $claims['roles'],
+            'auth_method' => $claims['auth_method'] ?? 'password',
+            'passkey_verified' => true === ($claims['passkey_verified'] ?? false),
+            'token_type' => $claims['token_type'],
+            'jti' => $claims['jti'],
+            'iat' => $claims['iat'],
+            'exp' => $claims['exp'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{type: string, challenge: string, origin: string}|null
+     */
+    private function extractPasskeyClientData(array $payload, string $expectedType): ?array
+    {
+        $clientData = $payload['client_data'] ?? null;
+        if (!is_array($clientData)) {
+            return null;
+        }
+
+        $type = trim((string) ($clientData['type'] ?? ''));
+        $challenge = trim((string) ($clientData['challenge'] ?? ''));
+        $origin = trim((string) ($clientData['origin'] ?? ''));
+
+        if ($expectedType !== $type || '' === $challenge || '' === $origin) {
+            return null;
+        }
+
+        return [
+            'type' => $type,
+            'challenge' => $challenge,
+            'origin' => $origin,
+        ];
+    }
+
+    private function isAllowedPasskeyOrigin(string $origin): bool
+    {
+        $normalizedOrigin = strtolower(trim($origin));
+
+        foreach ($this->passkeyAllowedOrigins as $allowedOrigin) {
+            if ($normalizedOrigin === strtolower(trim((string) $allowedOrigin))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<array{id: string, type: string}> $credentials
+     * @return list<string>
+     */
+    private function extractCredentialIds(array $credentials): array
+    {
+        $credentialIds = [];
+
+        foreach ($credentials as $credential) {
+            $credentialId = trim((string) ($credential['id'] ?? ''));
+            if ('' !== $credentialId) {
+                $credentialIds[] = $credentialId;
+            }
+        }
+
+        return $credentialIds;
     }
 }

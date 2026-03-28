@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Auth\InMemoryPasskeyPolicyStore;
 use App\Auth\JwtTokenService;
 use App\Entity\Reservation;
 use App\Repository\ReservationRepository;
@@ -18,6 +19,7 @@ final class AdminReservationsController extends AbstractController
         private readonly ReservationRepository $reservationRepository,
         private readonly ReservationApiView $reservationApiView,
         private readonly EntityManagerInterface $entityManager,
+        private readonly InMemoryPasskeyPolicyStore $passkeyPolicyStore,
         private readonly JwtTokenService $jwtTokenService,
     ) {
     }
@@ -147,6 +149,15 @@ final class AdminReservationsController extends AbstractController
         if (!in_array('ROLE_ADMIN', $claims['roles'], true)) {
             return $this->json([
                 'error' => 'insufficient_role',
+            ], 403);
+        }
+
+        if (
+            $this->passkeyPolicyStore->isPasskeyRequiredAfterPassword($claims['sub'], $claims['roles'])
+            && !(true === ($claims['passkey_verified'] ?? false))
+        ) {
+            return $this->json([
+                'error' => 'passkey_verification_required',
             ], 403);
         }
 
