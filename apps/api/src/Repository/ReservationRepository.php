@@ -25,20 +25,65 @@ class ReservationRepository extends ServiceEntityRepository
     }
 
     /**
-     * @return list<Reservation>
+     * @return array{items: list<Reservation>, total: int}
      */
-    public function findRecentWithEvent(int $limit = 20): array
-    {
-        /** @var list<Reservation> $reservations */
-        $reservations = $this->createQueryBuilder('reservation')
+    public function findRecentWithEventPage(
+        int $page,
+        int $perPage,
+        ?string $statusFilter = null,
+        ?string $eventSlugFilter = null,
+        ?string $queryFilter = null,
+    ): array {
+        $queryBuilder = $this->createQueryBuilder('reservation')
             ->addSelect('event')
-            ->join('reservation.event', 'event')
+            ->join('reservation.event', 'event');
+
+        if (null !== $statusFilter && '' !== $statusFilter) {
+            $queryBuilder
+                ->andWhere('reservation.status = :statusFilter')
+                ->setParameter('statusFilter', $statusFilter);
+        }
+
+        if (null !== $eventSlugFilter && '' !== $eventSlugFilter) {
+            $queryBuilder
+                ->andWhere('event.slug = :eventSlugFilter')
+                ->setParameter('eventSlugFilter', $eventSlugFilter);
+        }
+
+        if (null !== $queryFilter && '' !== $queryFilter) {
+            $normalizedQuery = mb_strtolower($queryFilter);
+
+            $queryBuilder
+                ->andWhere('(
+                    LOWER(reservation.reservationId) LIKE :searchQuery
+                    OR LOWER(reservation.attendeeName) LIKE :searchQuery
+                    OR LOWER(reservation.attendeeEmail) LIKE :searchQuery
+                    OR LOWER(event.title) LIKE :searchQuery
+                )')
+                ->setParameter('searchQuery', '%'.$normalizedQuery.'%');
+        }
+
+        $countQueryBuilder = clone $queryBuilder;
+        $countQueryBuilder
+            ->select('COUNT(reservation.id)')
+            ->resetDQLPart('orderBy');
+
+        $total = (int) $countQueryBuilder
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        /** @var list<Reservation> $reservations */
+        $reservations = $queryBuilder
             ->orderBy('reservation.createdAt', 'DESC')
             ->addOrderBy('reservation.id', 'DESC')
-            ->setMaxResults($limit)
+            ->setFirstResult(($page - 1) * $perPage)
+            ->setMaxResults($perPage)
             ->getQuery()
             ->getResult();
 
-        return $reservations;
+        return [
+            'items' => $reservations,
+            'total' => $total,
+        ];
     }
 }

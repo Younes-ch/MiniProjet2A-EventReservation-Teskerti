@@ -28,6 +28,8 @@ import {
   fetchAdminReservations,
   updateAdminReservationStatus,
   type AdminReservationItem,
+  type AdminReservationStatusFilter,
+  type AdminReservationsMeta,
 } from "../lib/reservationsClient";
 
 type DashboardState = "loading" | "ready" | "unauthenticated" | "error";
@@ -65,6 +67,13 @@ type AdminReservationRow = {
   bookedAt: string;
   status: "confirmed" | "cancelled";
 };
+
+const RESERVATIONS_PER_PAGE = 6;
+
+const isAdminReservationStatusFilter = (
+  value: string,
+): value is AdminReservationStatusFilter =>
+  value === "all" || value === "confirmed" || value === "cancelled";
 
 type EventEditorValues = {
   title: string;
@@ -134,12 +143,8 @@ const getEventStatus = (event: PublicEvent): string => {
   return "Active";
 };
 
-const buildMetrics = (
-  events: PublicEvent[],
-  reservations: AdminReservationItem[],
-): AdminMetric[] => {
+const buildMetrics = (events: PublicEvent[], totalReservations: number): AdminMetric[] => {
   const totalEvents = events.length;
-  const totalReservations = reservations.length;
   const upcomingEvents = events.filter(
     (event) => event.seats_available > 0,
   ).length;
@@ -240,7 +245,7 @@ const formatDateTime = (dateTimeValue: string): string => {
 const buildReservationRows = (
   reservations: AdminReservationItem[],
 ): AdminReservationRow[] =>
-  reservations.slice(0, 6).map((reservation) => ({
+  reservations.map((reservation) => ({
     id: reservation.id,
     reservationCode: reservation.reservation_id,
     attendeeName: reservation.attendee_name,
@@ -302,6 +307,10 @@ const mapCrudErrorMessage = (error: unknown): string => {
     return "Reservation status is invalid.";
   }
 
+  if (error.message === "invalid_reservation_status_filter") {
+    return "Reservation status filter is invalid.";
+  }
+
   if (
     error.message === "invalid_access_token" ||
     error.message === "missing_bearer_token" ||
@@ -352,8 +361,15 @@ export function AdminPage() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [reservations, setReservations] = useState<AdminReservationItem[]>([]);
+  const [reservationMeta, setReservationMeta] =
+    useState<AdminReservationsMeta | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [reservationPage, setReservationPage] = useState(1);
+  const [reservationStatusFilter, setReservationStatusFilter] =
+    useState<AdminReservationStatusFilter>("all");
+  const [reservationQueryInput, setReservationQueryInput] = useState("");
+  const [reservationSearchQuery, setReservationSearchQuery] = useState("");
   const [isEditorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("create");
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
@@ -422,7 +438,12 @@ export function AdminPage() {
       try {
         const [eventsPayload, reservationsPayload] = await Promise.all([
           fetchAdminEvents(validAccessToken),
-          fetchAdminReservations(validAccessToken),
+          fetchAdminReservations(validAccessToken, {
+            page: reservationPage,
+            perPage: RESERVATIONS_PER_PAGE,
+            status: reservationStatusFilter,
+            query: reservationSearchQuery,
+          }),
         ]);
 
         if (!isMounted) {
@@ -431,7 +452,11 @@ export function AdminPage() {
 
         setAuthUser(userProfile);
         setEvents(eventsPayload);
-        setReservations(reservationsPayload);
+        setReservations(reservationsPayload.items);
+        setReservationMeta(reservationsPayload.meta);
+        if (reservationsPayload.meta.page !== reservationPage) {
+          setReservationPage(reservationsPayload.meta.page);
+        }
         setAccessToken(validAccessToken);
         setActionErrorMessage(null);
         setDashboardState("ready");
@@ -450,11 +475,11 @@ export function AdminPage() {
     return () => {
       isMounted = false;
     };
-  }, [reloadNonce]);
+  }, [reloadNonce, reservationPage, reservationStatusFilter, reservationSearchQuery]);
 
   const metrics = useMemo(
-    () => buildMetrics(events, reservations),
-    [events, reservations],
+    () => buildMetrics(events, reservationMeta?.total_items ?? reservations.length),
+    [events, reservationMeta, reservations.length],
   );
   const recentEvents = useMemo(() => buildRecentEvents(events), [events]);
   const insights = useMemo(() => buildInsights(events), [events]);
@@ -462,6 +487,13 @@ export function AdminPage() {
     () => buildReservationRows(reservations),
     [reservations],
   );
+
+  const isReservationFilterActive =
+    reservationStatusFilter !== "all" || reservationSearchQuery.length > 0;
+
+  const canGoToPreviousReservationPage = (reservationMeta?.page ?? 1) > 1;
+  const canGoToNextReservationPage =
+    reservationMeta !== null && reservationMeta.page < reservationMeta.total_pages;
 
   const runWithFreshAccessToken = async <T,>(
     operation: (token: string) => Promise<T>,
@@ -622,6 +654,30 @@ export function AdminPage() {
     } finally {
       setActionSubmitting(false);
     }
+  };
+
+  const handleReservationStatusFilterChange = (
+    event: ChangeEvent<HTMLSelectElement>,
+  ) => {
+    const nextValue = event.target.value;
+    if (!isAdminReservationStatusFilter(nextValue)) {
+      return;
+    }
+
+    setReservationStatusFilter(nextValue);
+    setReservationPage(1);
+  };
+
+  const handleReservationSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setReservationSearchQuery(reservationQueryInput.trim());
+    setReservationPage(1);
+  };
+
+  const handleReservationSearchReset = () => {
+    setReservationQueryInput("");
+    setReservationSearchQuery("");
+    setReservationPage(1);
   };
 
   if (dashboardState === "loading") {
@@ -947,9 +1003,51 @@ export function AdminPage() {
 
         <aside className="admin-side-stack">
           <article className="admin-reservations-card">
-            <header>
+            <header className="admin-reservations-head">
               <h2>Reservation Queue</h2>
+              <small>
+                {reservationMeta?.total_items ?? reservations.length} total
+              </small>
             </header>
+
+            <div className="admin-reservation-controls">
+              <label className="admin-reservation-filter-label">
+                Status
+                <select
+                  value={reservationStatusFilter}
+                  onChange={handleReservationStatusFilterChange}
+                >
+                  <option value="all">All</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+
+              <form
+                className="admin-reservation-search-form"
+                onSubmit={handleReservationSearchSubmit}
+              >
+                <input
+                  type="search"
+                  value={reservationQueryInput}
+                  onChange={(event) => setReservationQueryInput(event.target.value)}
+                  placeholder="Search name, email, event"
+                  aria-label="Search reservations"
+                />
+                <button type="submit" className="admin-row-action-button">
+                  Apply
+                </button>
+                {reservationSearchQuery.length > 0 ? (
+                  <button
+                    type="button"
+                    className="admin-row-action-button"
+                    onClick={handleReservationSearchReset}
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </form>
+            </div>
 
             {recentReservations.length > 0 ? (
               <ul className="admin-reservation-list">
@@ -988,9 +1086,39 @@ export function AdminPage() {
               </ul>
             ) : (
               <p className="home-api-state">
-                No reservations have been placed yet.
+                {isReservationFilterActive
+                  ? "No reservations match the current filters."
+                  : "No reservations have been placed yet."}
               </p>
             )}
+
+            {reservationMeta && reservationMeta.total_pages > 1 ? (
+              <div className="admin-reservation-pagination">
+                <button
+                  type="button"
+                  className="admin-row-action-button"
+                  onClick={() =>
+                    setReservationPage((current) => Math.max(1, current - 1))
+                  }
+                  disabled={!canGoToPreviousReservationPage}
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {reservationMeta.page} of {reservationMeta.total_pages}
+                </span>
+                <button
+                  type="button"
+                  className="admin-row-action-button"
+                  onClick={() =>
+                    setReservationPage((current) => current + 1)
+                  }
+                  disabled={!canGoToNextReservationPage}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
           </article>
 
           <article className="admin-insight-card">
