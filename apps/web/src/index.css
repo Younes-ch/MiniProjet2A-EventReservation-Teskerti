@@ -460,6 +460,208 @@ input:focus-visible {
   background: var(--surface);
 }
 
+.admin-shell {
+  gap: 18px;
+}
+
+.admin-shell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.admin-search-row {
+  display: flex;
+  gap: 10px;
+  width: min(360px, 100%);
+}
+
+.admin-search-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #ffffff;
+}
+
+.admin-alert-button {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-strong);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-metric-card {
+  position: relative;
+  padding: 18px;
+  gap: 8px;
+}
+
+.admin-metric-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+}
+
+.metric-tone-1 {
+  background: #dcdfff;
+}
+
+.metric-tone-2 {
+  background: #dce7ff;
+}
+
+.metric-tone-3 {
+  background: #4b51ac;
+}
+
+.admin-metric-trend {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.admin-main-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 0.7fr;
+  gap: 14px;
+}
+
+.admin-events {
+  padding: 18px;
+}
+
+.admin-events-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.admin-events-head a {
+  color: var(--accent-strong);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-events-header {
+  margin-bottom: 6px;
+}
+
+.admin-events-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e4e8f7;
+}
+
+.admin-events-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-events-row strong {
+  font-size: 0.95rem;
+}
+
+.admin-events-row small {
+  color: var(--muted);
+}
+
+.admin-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid #cfd4ee;
+  padding: 4px 10px;
+  background: #f5f7ff;
+  color: #2a377d;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+}
+
+.admin-side-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-insight-card,
+.admin-plan-card {
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  padding: 18px;
+}
+
+.admin-insight-card ul {
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.admin-insight-card li {
+  border-left: 3px solid #5260cc;
+  padding-left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.admin-insight-card li p {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.admin-insight-card li span {
+  color: var(--muted);
+  font-size: 0.87rem;
+}
+
+.admin-plan-card {
+  background: linear-gradient(145deg, #20255f, #353d92);
+  color: #eef2ff;
+}
+
+.admin-plan-card h2,
+.admin-plan-card p {
+  color: inherit;
+}
+
+.admin-plan-card p {
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.admin-plan-card .button-primary {
+  margin-top: 14px;
+  background: #ffffff;
+  color: #232f7e;
+}
+
 .tickets-shell {
   gap: 20px;
 }
@@ -667,6 +869,17 @@ input:focus-visible {
     grid-template-columns: 1fr 1fr;
   }
 
+  .admin-shell-header,
+  .admin-main-grid,
+  .admin-kpi-grid {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .admin-search-row {
+    width: 100%;
+  }
+
   .ticket-card,
   .ticket-feature,
   .ticket-support-grid {
@@ -715,6 +928,12 @@ input:focus-visible {
   .metric-grid,
   .table-row {
     grid-template-columns: 1fr;
+  }
+
+  .admin-events-row,
+  .admin-events-header {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .hero-actions {
