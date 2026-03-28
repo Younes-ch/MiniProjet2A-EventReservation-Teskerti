@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 const compactTickets = [
   {
     passType: "Aura Premiere",
@@ -99,7 +101,7 @@ export function TicketsPage() {
             Our support team is available 24/7 to help with entry requirements,
             ticket transfers, and refund requests.
           </p>
-          <a href="#">Visit Help Center</a>
+          <Link to="/login">Visit Help Center</Link>
         </article>
         <article className="ticket-support-card ticket-support-verified">
           <h2>Verified Aura Pass</h2>

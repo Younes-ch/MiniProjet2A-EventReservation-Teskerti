@@ -1,15 +1,15 @@
+import { Link } from "react-router-dom";
+
 const trustSignals = [
   {
     title: "Passwordless entry",
     copy: "Sign in with FaceID or TouchID for seamless access.",
     toneClass: "signal-tone-indigo",
-    iconLabel: "Lock",
   },
   {
     title: "End-to-end security",
     copy: "Your data is protected by enterprise-grade encryption.",
     toneClass: "signal-tone-cyan",
-    iconLabel: "Shield",
   },
 ];
 
@@ -32,7 +32,7 @@ export function LoginPage() {
           {trustSignals.map((signal) => (
             <li key={signal.title} className="auth-signal-item">
               <span className={`auth-signal-icon ${signal.toneClass}`}>
-                <svg viewBox="0 0 24 24" aria-label={signal.iconLabel}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path d="M12 2l7 3v6c0 5-3.6 9.6-7 11-3.4-1.4-7-6-7-11V5l7-3z" />
                   <rect x="9" y="10" width="6" height="6" rx="1" />
                 </svg>
@@ -46,8 +46,8 @@ export function LoginPage() {
         </ul>
 
         <footer className="auth-meta-links">
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms of Service</a>
+          <Link to="/">Privacy Policy</Link>
+          <Link to="/">Terms of Service</Link>
         </footer>
       </div>
 
@@ -71,13 +71,25 @@ export function LoginPage() {
           onSubmit={(event) => event.preventDefault()}
         >
           <label htmlFor="email">Email address</label>
-          <input id="email" type="email" placeholder="alex@example.com" />
+          <input
+            id="email"
+            type="email"
+            placeholder="alex@example.com"
+            autoComplete="email"
+            required
+          />
 
           <div className="auth-label-row">
             <label htmlFor="password">Password</label>
-            <a href="#">Forgot password?</a>
+            <Link to="/login">Forgot password?</Link>
           </div>
-          <input id="password" type="password" placeholder="........" />
+          <input
+            id="password"
+            type="password"
+            placeholder="........"
+            autoComplete="current-password"
+            required
+          />
 
           <button type="submit" className="button-secondary wide">
             Sign in with password
@@ -85,7 +97,7 @@ export function LoginPage() {
         </form>
 
         <p className="auth-card-footer">
-          Don&apos;t have an account? <a href="#">Create an account</a>
+          Don&apos;t have an account? <Link to="/login">Create an account</Link>
         </p>
       </article>
     </section>

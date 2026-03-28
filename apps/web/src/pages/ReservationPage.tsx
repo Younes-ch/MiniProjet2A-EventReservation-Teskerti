@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const experienceSignals = [
@@ -29,6 +29,27 @@ const packageIncludes = [
 export function ReservationPage() {
   const [isModalOpen, setModalOpen] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setModalOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isModalOpen]);
 
   const handleReservationSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -124,12 +145,14 @@ export function ReservationPage() {
             className="reservation-modal-backdrop"
             onClick={() => setModalOpen(false)}
             aria-label="Close reservation dialog"
+            tabIndex={-1}
           />
           <section
             className="reservation-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="reservation-modal-title"
+            aria-describedby="reservation-modal-description"
           >
             <button
               type="button"
@@ -141,7 +164,7 @@ export function ReservationPage() {
             </button>
 
             <h2 id="reservation-modal-title">Secure Your Spot</h2>
-            <p>
+            <p id="reservation-modal-description">
               Fill in your details to finalize the reservation for EventFlow.
             </p>
 
@@ -151,6 +174,9 @@ export function ReservationPage() {
                 id="reservation-name"
                 type="text"
                 placeholder="John Architect"
+                autoComplete="name"
+                required
+                autoFocus
               />
 
               <label htmlFor="reservation-email">Email Address</label>
@@ -158,6 +184,8 @@ export function ReservationPage() {
                 id="reservation-email"
                 type="email"
                 placeholder="john@auraevents.com"
+                autoComplete="email"
+                required
               />
 
               <label htmlFor="reservation-phone">Phone Number</label>
@@ -165,6 +193,8 @@ export function ReservationPage() {
                 id="reservation-phone"
                 type="tel"
                 placeholder="+1 (555) 000-0000"
+                autoComplete="tel"
+                required
               />
 
               <button type="submit" className="button-primary wide">

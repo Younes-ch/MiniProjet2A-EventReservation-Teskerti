@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 const metrics = [
   { label: "Total events", value: "142", trend: "+12%", tone: "metric-tone-1" },
   {
@@ -98,7 +100,7 @@ export function AdminPage() {
         >
           <header className="admin-events-head">
             <h2>Recent Events</h2>
-            <a href="#">View all</a>
+            <Link to="/tickets">View all</Link>
           </header>
 
           <div className="table-row table-header admin-events-header">

@@ -205,7 +205,11 @@ h3 {
 .button-secondary:focus-visible,
 .login-link:focus-visible,
 .nav-link:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible,
+.reservation-modal-close:focus-visible,
+.confirmation-help a:focus-visible,
+.confirmation-footer a:focus-visible {
   outline: 3px solid #9faaf8;
   outline-offset: 2px;
 }
@@ -1810,6 +1814,11 @@ input:focus-visible {
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 0.78rem;
+}
+
+.confirmation-footer a {
+  color: inherit;
+  text-decoration: none;
 }
 
 @media (max-width: 1024px) {

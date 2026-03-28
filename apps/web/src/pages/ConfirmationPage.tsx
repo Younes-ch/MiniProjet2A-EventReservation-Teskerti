@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 const reservationMeta = [
   {
     label: "Date",
@@ -62,15 +64,22 @@ export function ConfirmationPage() {
       </button>
 
       <p className="confirmation-help">
-        Need help? Reach out to us at <a href="#">support@eventflow.com</a>
+        Need help? Reach out to us at
+        <a href="mailto:support@eventflow.com"> support@eventflow.com</a>
       </p>
 
       <footer className="confirmation-footer" aria-label="Confirmation footer">
         <small>© 2024 EventFlow Technologies. All rights reserved.</small>
         <ul>
-          <li>Privacy</li>
-          <li>Terms</li>
-          <li>Contact</li>
+          <li>
+            <Link to="/">Privacy</Link>
+          </li>
+          <li>
+            <Link to="/">Terms</Link>
+          </li>
+          <li>
+            <Link to="/">Contact</Link>
+          </li>
         </ul>
       </footer>
     </section>
