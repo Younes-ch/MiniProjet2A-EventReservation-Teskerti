@@ -1,5 +1,5 @@
 export type PublicEvent = {
-  id: string;
+  id: number;
   slug: string;
   title: string;
   summary: string;
@@ -16,6 +16,20 @@ export type PublicEvent = {
 
 type EventsListResponse = {
   items: PublicEvent[];
+};
+
+export type UpsertEventPayload = {
+  title: string;
+  summary: string;
+  category: string;
+  location: string;
+  city: string;
+  starts_at: string;
+  price_amount: number;
+  currency: string;
+  seats_total: number;
+  seats_available: number;
+  visual_tone: string;
 };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -63,3 +77,48 @@ export const fetchPublicEvents = async (): Promise<PublicEvent[]> => {
 
 export const fetchPublicEventBySlug = (eventSlug: string) =>
   requestJson<PublicEvent>(`/api/events/${encodeURIComponent(eventSlug)}`);
+
+export const fetchAdminEvents = async (
+  accessToken: string,
+): Promise<PublicEvent[]> => {
+  const response = await requestJson<EventsListResponse>("/api/admin/events", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  return response.items;
+};
+
+export const createAdminEvent = (
+  accessToken: string,
+  payload: UpsertEventPayload,
+) =>
+  requestJson<PublicEvent>("/api/admin/events", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+export const updateAdminEvent = (
+  accessToken: string,
+  eventId: number,
+  payload: UpsertEventPayload,
+) =>
+  requestJson<PublicEvent>(`/api/admin/events/${eventId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+export const deleteAdminEvent = (accessToken: string, eventId: number) =>
+  requestJson<Record<string, never>>(`/api/admin/events/${eventId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });

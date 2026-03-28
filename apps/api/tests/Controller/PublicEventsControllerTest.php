@@ -2,10 +2,19 @@
 
 namespace App\Tests\Controller;
 
+use App\Tests\Support\ResetsDatabaseWithSeedEvents;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class PublicEventsControllerTest extends WebTestCase
 {
+    use ResetsDatabaseWithSeedEvents;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->resetDatabaseWithSeedEvents();
+    }
+
     public function testListEndpointReturnsEventsCollection(): void
     {
         $client = static::createClient();

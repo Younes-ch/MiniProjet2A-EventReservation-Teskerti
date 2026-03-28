@@ -2,10 +2,19 @@
 
 namespace App\Tests\Controller;
 
+use App\Tests\Support\ResetsDatabaseWithSeedEvents;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class PublicReservationsControllerTest extends WebTestCase
 {
+    use ResetsDatabaseWithSeedEvents;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->resetDatabaseWithSeedEvents();
+    }
+
     public function testCreateReservationReturnsConfirmationPayload(): void
     {
         $client = static::createClient();

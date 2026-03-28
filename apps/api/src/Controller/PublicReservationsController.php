@@ -2,7 +2,10 @@
 
 namespace App\Controller;
 
-use App\Event\InMemoryEventCatalog;
+use App\Entity\Reservation;
+use App\Repository\EventRepository;
+use App\Repository\ReservationRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -10,8 +13,11 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class PublicReservationsController extends AbstractController
 {
-    public function __construct(private readonly InMemoryEventCatalog $eventCatalog)
-    {
+    public function __construct(
+        private readonly EventRepository $eventRepository,
+        private readonly ReservationRepository $reservationRepository,
+        private readonly EntityManagerInterface $entityManager,
+    ) {
     }
 
     #[Route('/api/reservations', name: 'api_public_reservations_create', methods: ['POST'])]
@@ -42,27 +48,40 @@ final class PublicReservationsController extends AbstractController
             ], 400);
         }
 
-        $event = $this->eventCatalog->findBySlug($eventSlug);
+        $event = $this->eventRepository->findOneBySlug($eventSlug);
         if (null === $event) {
             return $this->json([
                 'error' => 'event_not_found',
             ], 404);
         }
 
-        $startsAt = $this->parseDate((string) $event['starts_at']);
-        $eventDate = null !== $startsAt ? $startsAt->format('F j, Y') : 'Date to be announced';
-        $eventTime = null !== $startsAt ? $startsAt->format('H:i') : 'Time to be announced';
+        $reservationId = $this->buildReservationId();
+
+        $reservation = (new Reservation())
+            ->setReservationId($reservationId)
+            ->setAttendeeName($fullName)
+            ->setAttendeeEmail($email)
+            ->setAttendeePhone($phone)
+            ->setEvent($event)
+            ->setCreatedAt(new \DateTimeImmutable());
+
+        $this->entityManager->persist($reservation);
+        $this->entityManager->flush();
+
+        $startsAt = $event->getStartsAt();
+        $eventDate = $startsAt->format('F j, Y');
+        $eventTime = $startsAt->format('H:i');
 
         return $this->json([
-            'reservation_id' => $this->buildReservationId(),
+            'reservation_id' => $reservationId,
             'attendee_name' => $fullName,
             'attendee_email' => $email,
             'attendee_phone' => $phone,
-            'event_slug' => $event['slug'],
-            'event_title' => $event['title'],
+            'event_slug' => $event->getSlug(),
+            'event_title' => $event->getTitle(),
             'event_date' => $eventDate,
             'event_time' => $eventTime,
-            'event_location' => $event['location'].', '.$event['city'],
+            'event_location' => $event->getLocation().', '.$event->getCity(),
         ], 201);
     }
 
@@ -87,18 +106,13 @@ final class PublicReservationsController extends AbstractController
 
     private function buildReservationId(): string
     {
-        $stamp = strtoupper(dechex(time()));
-        $entropy = strtoupper(bin2hex(random_bytes(2)));
+        do {
+            $stamp = strtoupper(dechex(time()));
+            $entropy = strtoupper(bin2hex(random_bytes(2)));
+            $candidate = sprintf('RSV-%s-%s', substr($stamp, -4), $entropy);
+            $existing = $this->reservationRepository->findOneByReservationId($candidate);
+        } while (null !== $existing);
 
-        return sprintf('RSV-%s-%s', substr($stamp, -4), $entropy);
-    }
-
-    private function parseDate(string $value): ?\DateTimeImmutable
-    {
-        try {
-            return new \DateTimeImmutable($value);
-        } catch (\Exception) {
-            return null;
-        }
+        return $candidate;
     }
 }
