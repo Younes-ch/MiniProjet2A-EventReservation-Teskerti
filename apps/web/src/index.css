@@ -1548,6 +1548,16 @@ select:focus-visible,
   color: rgba(233, 240, 255, 0.92);
 }
 
+.reservation-event-note {
+  margin-top: 8px;
+  border: 1px solid rgba(255, 207, 220, 0.5);
+  border-radius: 10px;
+  background: rgba(81, 19, 42, 0.44);
+  color: #ffe6ee;
+  padding: 8px 10px;
+  line-height: 1.4;
+}
+
 .reservation-content {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.7fr);
@@ -1768,6 +1778,17 @@ select:focus-visible,
 
 .reservation-modal form .button-primary {
   margin-top: 12px;
+}
+
+.reservation-submit-error {
+  margin: 6px 0 0;
+  border: 1px solid #f0ccd3;
+  border-radius: 10px;
+  background: #fff4f6;
+  color: #8e2d40;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  padding: 9px 10px;
 }
 
 .reservation-modal form .button-primary:disabled {

@@ -3,10 +3,11 @@ import {
   type FormEvent,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { fetchPublicEventBySlug, type PublicEvent } from "../lib/eventsClient";
+import { createReservation } from "../lib/reservationsClient";
 
 type ReservationFormValues = {
   fullName: string;
@@ -29,17 +30,12 @@ type ReservationConfirmationState = {
   location: string;
 };
 
+const FALLBACK_EVENT_SLUG = "midnight-resonance-2-0";
+
 const initialFormValues: ReservationFormValues = {
   fullName: "",
   email: "",
   phone: "",
-};
-
-const confirmationDefaults = {
-  eventTitle: "The Luminosity Gala 2024",
-  date: "October 24, 2024",
-  time: "19:00 - 23:00",
-  location: "Grand Plaza, NY",
 };
 
 const validateReservationForm = (
@@ -64,10 +60,78 @@ const validateReservationForm = (
   return errors;
 };
 
-const createReservationId = () => {
-  const stamp = Date.now().toString(36).slice(-4).toUpperCase();
-  const entropy = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `EF-${stamp}-${entropy}`;
+const formatEventPrice = (event: PublicEvent): string => {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: event.currency,
+      maximumFractionDigits: 2,
+    }).format(event.price_amount);
+  } catch {
+    return `$${event.price_amount.toFixed(2)}`;
+  }
+};
+
+const parseEventDate = (startsAt: string): Date | null => {
+  const parsed = new Date(startsAt);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const buildEventDateLabel = (startsAt: string): string => {
+  const parsed = parseEventDate(startsAt);
+
+  if (!parsed) {
+    return "Date to be announced";
+  }
+
+  return parsed.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const buildEventTimeLabel = (startsAt: string): string => {
+  const parsed = parseEventDate(startsAt);
+
+  if (!parsed) {
+    return "Time to be announced";
+  }
+
+  return parsed.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
+const mapReservationErrorMessage = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return "Unable to confirm reservation right now.";
+  }
+
+  if (error.message === "reservation_fields_required") {
+    return "Please complete all reservation fields.";
+  }
+
+  if (error.message === "invalid_reservation_payload") {
+    return "Email or phone number format is invalid.";
+  }
+
+  if (error.message === "event_not_found") {
+    return "Selected event is no longer available.";
+  }
+
+  if (error.message === "invalid_json_payload") {
+    return "Unexpected reservation payload format.";
+  }
+
+  return "Unable to confirm reservation right now.";
 };
 
 const experienceSignals = [
@@ -96,6 +160,14 @@ const packageIncludes = [
 ];
 
 export function ReservationPage() {
+  const [searchParams] = useSearchParams();
+  const selectedEventSlug =
+    (searchParams.get("event") ?? FALLBACK_EVENT_SLUG).trim() ||
+    FALLBACK_EVENT_SLUG;
+
+  const [selectedEvent, setSelectedEvent] = useState<PublicEvent | null>(null);
+  const [isEventLoading, setEventLoading] = useState(true);
+  const [eventLoadError, setEventLoadError] = useState<string | null>(null);
   const [isModalOpen, setModalOpen] = useState(true);
   const [formValues, setFormValues] =
     useState<ReservationFormValues>(initialFormValues);
@@ -108,7 +180,8 @@ export function ReservationPage() {
   });
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
-  const submitTimeoutRef = useRef<number | null>(null);
+  const [submitErrorMessage, setSubmitErrorMessage] =
+    useState<string | null>(null);
   const navigate = useNavigate();
 
   const formErrors = useMemo(
@@ -164,55 +237,120 @@ export function ReservationPage() {
   }, [isModalOpen, isSubmitting]);
 
   useEffect(() => {
-    return () => {
-      if (submitTimeoutRef.current !== null) {
-        window.clearTimeout(submitTimeoutRef.current);
+    let isMounted = true;
+
+    const loadEvent = async () => {
+      setEventLoading(true);
+      setEventLoadError(null);
+
+      try {
+        const payload = await fetchPublicEventBySlug(selectedEventSlug);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setSelectedEvent(payload);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setSelectedEvent(null);
+
+        if (error instanceof Error && error.message === "event_not_found") {
+          setEventLoadError("Selected event is not available.");
+        } else {
+          setEventLoadError("Unable to load selected event details.");
+        }
+      } finally {
+        if (isMounted) {
+          setEventLoading(false);
+        }
       }
     };
-  }, []);
 
-  const handleReservationSubmit = (event: FormEvent<HTMLFormElement>) => {
+    void loadEvent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedEventSlug]);
+
+  const handleReservationSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitAttempted(true);
+    setSubmitErrorMessage(null);
 
-    if (!isFormValid) {
+    if (!isFormValid || !selectedEvent || isEventLoading || eventLoadError) {
+      if (!selectedEvent || isEventLoading || eventLoadError) {
+        setSubmitErrorMessage("This event cannot be reserved right now.");
+      }
+
       return;
     }
 
     setSubmitting(true);
 
-    const confirmationState: ReservationConfirmationState = {
-      attendeeName: formValues.fullName.trim(),
-      attendeeEmail: formValues.email.trim(),
-      attendeePhone: formValues.phone.trim(),
-      reservationId: createReservationId(),
-      eventTitle: confirmationDefaults.eventTitle,
-      date: confirmationDefaults.date,
-      time: confirmationDefaults.time,
-      location: confirmationDefaults.location,
-    };
+    try {
+      const payload = await createReservation({
+        event_slug: selectedEvent.slug,
+        full_name: formValues.fullName.trim(),
+        email: formValues.email.trim(),
+        phone: formValues.phone.trim(),
+      });
 
-    submitTimeoutRef.current = window.setTimeout(() => {
+      const confirmationState: ReservationConfirmationState = {
+        attendeeName: payload.attendee_name,
+        attendeeEmail: payload.attendee_email,
+        attendeePhone: payload.attendee_phone,
+        reservationId: payload.reservation_id,
+        eventTitle: payload.event_title,
+        date: payload.event_date,
+        time: payload.event_time,
+        location: payload.event_location,
+      };
+
       setSubmitting(false);
       setModalOpen(false);
       navigate("/confirmation", {
         state: confirmationState,
       });
-    }, 900);
+    } catch (error) {
+      setSubmitting(false);
+      setSubmitErrorMessage(mapReservationErrorMessage(error));
+    }
   };
+
+  const eventTitle = selectedEvent?.title ?? "Loading selected event";
+  const eventSummary =
+    selectedEvent?.summary ??
+    "The event details are loading from the API. Please wait a moment.";
+  const eventCategory = selectedEvent?.category ?? "Exclusive event";
+  const eventPrice = selectedEvent ? formatEventPrice(selectedEvent) : "--";
+  const eventDate = selectedEvent
+    ? buildEventDateLabel(selectedEvent.starts_at)
+    : "Date to be announced";
+  const eventTime = selectedEvent
+    ? buildEventTimeLabel(selectedEvent.starts_at)
+    : "Time to be announced";
+  const eventLocation = selectedEvent
+    ? `${selectedEvent.location}, ${selectedEvent.city}`
+    : "Venue details are loading";
+  const bookingDisabled = isEventLoading || Boolean(eventLoadError);
 
   return (
     <>
       <section className="reservation-hero" aria-labelledby="reservation-title">
         <div className="reservation-hero-copy">
-          <p className="eyebrow">Exclusive event</p>
-          <h1 id="reservation-title">
-            EventFlow of Dynamic Interactive Experiences
-          </h1>
-          <p>
-            Join a full-day architecture and innovation summit crafted for
-            builders, creators, and operators shaping the next decade.
-          </p>
+          <p className="eyebrow">{eventCategory}</p>
+          <h1 id="reservation-title">{eventTitle}</h1>
+          <p>{eventSummary}</p>
+          {eventLoadError ? (
+            <p className="reservation-event-note" role="alert">
+              {eventLoadError}
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -245,7 +383,7 @@ export function ReservationPage() {
 
         <aside className="reservation-price-card" aria-label="Ticket package">
           <p className="reservation-price-label">Admission</p>
-          <strong>$299.00</strong>
+          <strong>{eventPrice}</strong>
           <ul>
             {packageIncludes.map(([label, value]) => (
               <li key={label}>
@@ -257,14 +395,22 @@ export function ReservationPage() {
           <button
             type="button"
             className="button-primary wide"
+            disabled={bookingDisabled}
             onClick={() => {
+              if (bookingDisabled) {
+                return;
+              }
+
               setModalOpen(true);
               setSubmitAttempted(false);
+              setSubmitErrorMessage(null);
             }}
           >
             Book now
           </button>
-          <small>Non-refundable. Limited tickets remaining.</small>
+          <small>
+            {eventLoadError ?? "Non-refundable. Limited tickets remaining."}
+          </small>
         </aside>
       </section>
 
@@ -274,9 +420,11 @@ export function ReservationPage() {
       >
         <div>
           <h2>Venue & Direction</h2>
-          <h3>The Glass Pavilion</h3>
-          <p>42nd High Line St, Manhattan, NY 10011</p>
-          <p>Accessible via A, C, E subway lines at 14th St Station.</p>
+          <h3>{selectedEvent?.location ?? "Loading venue"}</h3>
+          <p>{eventLocation}</p>
+          <p>
+            {eventDate} at {eventTime}
+          </p>
         </div>
         <div
           className="reservation-map"
@@ -318,7 +466,7 @@ export function ReservationPage() {
 
             <h2 id="reservation-modal-title">Secure Your Spot</h2>
             <p id="reservation-modal-description">
-              Fill in your details to finalize the reservation for EventFlow.
+              Fill in your details to finalize the reservation for {eventTitle}.
             </p>
 
             <form onSubmit={handleReservationSubmit}>
@@ -404,12 +552,22 @@ export function ReservationPage() {
                 </span>
               ) : null}
 
+              {submitErrorMessage ? (
+                <p className="reservation-submit-error" role="alert">
+                  {submitErrorMessage}
+                </p>
+              ) : null}
+
               <button
                 type="submit"
                 className="button-primary wide"
-                disabled={isSubmitting}
+                disabled={isSubmitting || bookingDisabled}
               >
-                {isSubmitting ? "Processing..." : "Confirm Reservation"}
+                {isSubmitting
+                  ? "Processing..."
+                  : bookingDisabled
+                    ? "Event unavailable"
+                    : "Confirm Reservation"}
               </button>
             </form>
 
