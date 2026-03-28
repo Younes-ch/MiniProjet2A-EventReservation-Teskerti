@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AdminPage } from "./pages/AdminPage";
+import { ConfirmationPage } from "./pages/ConfirmationPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReservationPage } from "./pages/ReservationPage";
@@ -32,5 +33,9 @@ export const router = createBrowserRouter([
         element: <ReservationPage />,
       },
     ],
+  },
+  {
+    path: "/confirmation",
+    element: <ConfirmationPage />,
   },
 ]);

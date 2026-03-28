@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const experienceSignals = [
   {
@@ -27,16 +28,25 @@ const packageIncludes = [
 
 export function ReservationPage() {
   const [isModalOpen, setModalOpen] = useState(true);
+  const navigate = useNavigate();
+
+  const handleReservationSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setModalOpen(false);
+    navigate("/confirmation");
+  };
 
   return (
     <>
       <section className="reservation-hero" aria-labelledby="reservation-title">
         <div className="reservation-hero-copy">
           <p className="eyebrow">Exclusive event</p>
-          <h1 id="reservation-title">EventFlow of Dynamic Interactive Experiences</h1>
+          <h1 id="reservation-title">
+            EventFlow of Dynamic Interactive Experiences
+          </h1>
           <p>
-            Join a full-day architecture and innovation summit crafted for builders,
-            creators, and operators shaping the next decade.
+            Join a full-day architecture and innovation summit crafted for
+            builders, creators, and operators shaping the next decade.
           </p>
         </div>
       </section>
@@ -45,16 +55,17 @@ export function ReservationPage() {
         <article className="reservation-overview section-block">
           <h2>Experience The Unfolding</h2>
           <p>
-            EventFlow is more than just a conference. It is a curated architecture
-            journey through the next decade of technology and design. Join industry
-            pioneers as we explore the convergence of lucid interfaces, human-centric
-            AI, and the evolving landscape of digital experiences.
+            EventFlow is more than just a conference. It is a curated
+            architecture journey through the next decade of technology and
+            design. Join industry pioneers as we explore the convergence of
+            lucid interfaces, human-centric AI, and the evolving landscape of
+            digital experiences.
           </p>
           <p>
-            The day is structured as a series of immersive chapters, each set in a
-            different sensory zone of The Glass Pavilion. From high-energy keynote
-            firesides to tranquil deep-dive labs, every moment is architected for
-            maximum engagement and professional growth.
+            The day is structured as a series of immersive chapters, each set in
+            a different sensory zone of The Glass Pavilion. From high-energy
+            keynote firesides to tranquil deep-dive labs, every moment is
+            architected for maximum engagement and professional growth.
           </p>
 
           <div className="reservation-signal-grid">
@@ -89,14 +100,21 @@ export function ReservationPage() {
         </aside>
       </section>
 
-      <section className="reservation-location section-block" aria-label="Venue details">
+      <section
+        className="reservation-location section-block"
+        aria-label="Venue details"
+      >
         <div>
           <h2>Venue & Direction</h2>
           <h3>The Glass Pavilion</h3>
           <p>42nd High Line St, Manhattan, NY 10011</p>
           <p>Accessible via A, C, E subway lines at 14th St Station.</p>
         </div>
-        <div className="reservation-map" role="img" aria-label="Map preview placeholder" />
+        <div
+          className="reservation-map"
+          role="img"
+          aria-label="Map preview placeholder"
+        />
       </section>
 
       {isModalOpen ? (
@@ -123,17 +141,31 @@ export function ReservationPage() {
             </button>
 
             <h2 id="reservation-modal-title">Secure Your Spot</h2>
-            <p>Fill in your details to finalize the reservation for EventFlow.</p>
+            <p>
+              Fill in your details to finalize the reservation for EventFlow.
+            </p>
 
-            <form onSubmit={(event) => event.preventDefault()}>
+            <form onSubmit={handleReservationSubmit}>
               <label htmlFor="reservation-name">Full Name</label>
-              <input id="reservation-name" type="text" placeholder="John Architect" />
+              <input
+                id="reservation-name"
+                type="text"
+                placeholder="John Architect"
+              />
 
               <label htmlFor="reservation-email">Email Address</label>
-              <input id="reservation-email" type="email" placeholder="john@auraevents.com" />
+              <input
+                id="reservation-email"
+                type="email"
+                placeholder="john@auraevents.com"
+              />
 
               <label htmlFor="reservation-phone">Phone Number</label>
-              <input id="reservation-phone" type="tel" placeholder="+1 (555) 000-0000" />
+              <input
+                id="reservation-phone"
+                type="tel"
+                placeholder="+1 (555) 000-0000"
+              />
 
               <button type="submit" className="button-primary wide">
                 Confirm Reservation
