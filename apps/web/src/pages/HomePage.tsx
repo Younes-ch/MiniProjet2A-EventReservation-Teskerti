@@ -108,7 +108,7 @@ export function HomePage() {
             <h2 id="upcoming-events-heading">Upcoming experiences</h2>
             <p>Handpicked events happening in your area this week.</p>
           </div>
-          <div className="home-events-controls" aria-hidden="true">
+          <div className="home-events-controls">
             <button type="button">&#8249;</button>
             <button type="button">&#8250;</button>
           </div>
