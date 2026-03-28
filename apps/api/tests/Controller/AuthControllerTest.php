@@ -70,6 +70,104 @@ class AuthControllerTest extends WebTestCase
         $this->assertNotSame($loginData['refresh_token'], $refreshData['refresh_token']);
     }
 
+    public function testLogoutRevokesRefreshToken(): void
+    {
+        $client = static::createClient();
+        $loginData = $this->loginAndGetPayload($client);
+
+        $client->request('POST', '/api/auth/logout', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'refresh_token' => $loginData['refresh_token'],
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $logoutData = $this->decodeResponse($client);
+        $this->assertSame('logged_out', $logoutData['status'] ?? null);
+
+        $client->request('POST', '/api/auth/refresh', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'refresh_token' => $loginData['refresh_token'],
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(401);
+
+        $refreshData = $this->decodeResponse($client);
+        $this->assertSame('invalid_refresh_token', $refreshData['error'] ?? null);
+    }
+
+    public function testPasskeyOptionsReturnsChallengeForRegisteredCredential(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/auth/passkey/options', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'email' => self::EMAIL,
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $data = $this->decodeResponse($client);
+        $this->assertIsString($data['challenge'] ?? null);
+        $this->assertNotSame('', $data['challenge'] ?? '');
+        $this->assertIsArray($data['allow_credentials'] ?? null);
+        $this->assertGreaterThan(0, count($data['allow_credentials']));
+        $this->assertSame('public-key', $data['allow_credentials'][0]['type'] ?? null);
+    }
+
+    public function testPasskeyVerifyReturnsTokenPairForValidCredential(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/auth/passkey/options', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'email' => self::EMAIL,
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $optionsData = $this->decodeResponse($client);
+        $challenge = (string) ($optionsData['challenge'] ?? '');
+        $credentialId = (string) ($optionsData['allow_credentials'][0]['id'] ?? '');
+
+        $client->request('POST', '/api/auth/passkey/verify', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'email' => self::EMAIL,
+            'challenge' => $challenge,
+            'credential_id' => $credentialId,
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $verifyData = $this->decodeResponse($client);
+        $this->assertSame('Bearer', $verifyData['token_type'] ?? null);
+        $this->assertArrayHasKey('access_token', $verifyData);
+        $this->assertArrayHasKey('refresh_token', $verifyData);
+    }
+
+    public function testPasskeyVerifyRejectsInvalidChallenge(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/auth/passkey/verify', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'email' => self::EMAIL,
+            'challenge' => 'invalid-challenge',
+            'credential_id' => 'demo-passkey-alex-2026',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(401);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('passkey_challenge_invalid', $data['error'] ?? null);
+    }
+
     public function testMeReturnsProfileForValidAccessToken(): void
     {
         $client = static::createClient();

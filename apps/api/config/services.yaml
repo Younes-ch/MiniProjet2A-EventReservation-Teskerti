@@ -12,6 +12,10 @@ parameters:
           display_name: 'Alex Rivera'
           password_hash: '$2y$12$5yFkWcIIj8xrkUxVUbP.EuuN8tSm9TLP/JpiV5JIo8irAwdS0iNBW'
           roles: ['ROLE_ADMIN', 'ROLE_USER']
+    app.passkey_credentials:
+        - email: 'alex@example.com'
+          credential_id: 'demo-passkey-alex-2026'
+          label: 'Alex MacBook Touch ID'
 
 services:
     # default configuration for services in *this* file
@@ -27,6 +31,18 @@ services:
     App\Auth\InMemoryAuthUserStore:
         arguments:
             $users: '%app.auth_users%'
+
+    App\Auth\InMemoryPasskeyCredentialStore:
+        arguments:
+            $seedCredentials: '%app.passkey_credentials%'
+
+    App\Auth\InMemoryPasskeyChallengeStore:
+        arguments:
+            $cachePool: '@cache.app'
+
+    App\Auth\InMemoryRefreshTokenRevocationStore:
+        arguments:
+            $cachePool: '@cache.app'
 
     App\Auth\JwtTokenService:
         arguments:

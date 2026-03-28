@@ -8,10 +8,21 @@ export type AuthSession = {
   user: AuthUser;
 };
 
+export const AUTH_SESSION_CHANGED_EVENT = "tiskerti.auth.session.changed";
+
 const AUTH_STORAGE_KEY = "tiskerti.auth.session";
+
+const notifyAuthSessionChanged = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event(AUTH_SESSION_CHANGED_EVENT));
+};
 
 export const saveAuthSession = (session: AuthSession): void => {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  notifyAuthSessionChanged();
 };
 
 export const loadAuthSession = (): AuthSession | null => {
@@ -41,4 +52,5 @@ export const loadAuthSession = (): AuthSession | null => {
 
 export const clearAuthSession = (): void => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  notifyAuthSessionChanged();
 };

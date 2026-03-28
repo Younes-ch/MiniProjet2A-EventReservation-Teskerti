@@ -2,6 +2,9 @@
 
 namespace App\Controller;
 
+use App\Auth\InMemoryPasskeyChallengeStore;
+use App\Auth\InMemoryPasskeyCredentialStore;
+use App\Auth\InMemoryRefreshTokenRevocationStore;
 use App\Auth\InMemoryAuthUserStore;
 use App\Auth\JwtTokenService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -13,6 +16,9 @@ final class AuthController extends AbstractController
 {
     public function __construct(
         private readonly InMemoryAuthUserStore $userStore,
+        private readonly InMemoryPasskeyCredentialStore $passkeyCredentialStore,
+        private readonly InMemoryPasskeyChallengeStore $passkeyChallengeStore,
+        private readonly InMemoryRefreshTokenRevocationStore $refreshTokenRevocationStore,
         private readonly JwtTokenService $jwtTokenService,
     ) {
     }
@@ -70,10 +76,131 @@ final class AuthController extends AbstractController
             ], 401);
         }
 
+        if ($this->refreshTokenRevocationStore->isRevoked($tokenPayload['jti'])) {
+            return $this->json([
+                'error' => 'invalid_refresh_token',
+            ], 401);
+        }
+
         $user = $this->userStore->findByEmail($tokenPayload['sub']);
         if (null === $user) {
             return $this->json([
                 'error' => 'invalid_refresh_token',
+            ], 401);
+        }
+
+        return $this->json($this->buildAuthResponse($user));
+    }
+
+    #[Route('/api/auth/logout', name: 'api_auth_logout', methods: ['POST'])]
+    public function logout(Request $request): JsonResponse
+    {
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $refreshToken = trim((string) ($payload['refresh_token'] ?? ''));
+        if ('' === $refreshToken) {
+            return $this->json([
+                'error' => 'refresh_token_required',
+            ], 400);
+        }
+
+        $tokenPayload = $this->jwtTokenService->parseAndValidate($refreshToken, 'refresh');
+        if (null === $tokenPayload) {
+            return $this->json([
+                'error' => 'invalid_refresh_token',
+            ], 401);
+        }
+
+        $this->refreshTokenRevocationStore->revoke($tokenPayload['jti'], $tokenPayload['exp']);
+
+        return $this->json([
+            'status' => 'logged_out',
+        ]);
+    }
+
+    #[Route('/api/auth/passkey/options', name: 'api_auth_passkey_options', methods: ['POST'])]
+    public function passkeyOptions(Request $request): JsonResponse
+    {
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $email = strtolower(trim((string) ($payload['email'] ?? '')));
+        if ('' === $email) {
+            return $this->json([
+                'error' => 'email_required',
+            ], 400);
+        }
+
+        $user = $this->userStore->findByEmail($email);
+        if (null === $user) {
+            return $this->json([
+                'error' => 'passkey_not_registered',
+            ], 404);
+        }
+
+        $allowCredentials = $this->passkeyCredentialStore->findAllowedCredentialsByEmail($email);
+        if ([] === $allowCredentials) {
+            return $this->json([
+                'error' => 'passkey_not_registered',
+            ], 404);
+        }
+
+        $challenge = $this->passkeyChallengeStore->issueChallenge($email, 'login');
+
+        return $this->json([
+            'challenge' => $challenge,
+            'timeout' => 60000,
+            'rp_id' => 'localhost',
+            'user_verification' => 'preferred',
+            'allow_credentials' => $allowCredentials,
+        ]);
+    }
+
+    #[Route('/api/auth/passkey/verify', name: 'api_auth_passkey_verify', methods: ['POST'])]
+    public function passkeyVerify(Request $request): JsonResponse
+    {
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $email = strtolower(trim((string) ($payload['email'] ?? '')));
+        $challenge = trim((string) ($payload['challenge'] ?? ''));
+        $credentialId = trim((string) ($payload['credential_id'] ?? ''));
+
+        if ('' === $email || '' === $challenge || '' === $credentialId) {
+            return $this->json([
+                'error' => 'passkey_payload_invalid',
+            ], 400);
+        }
+
+        $user = $this->userStore->findByEmail($email);
+        if (null === $user) {
+            return $this->json([
+                'error' => 'passkey_not_registered',
+            ], 404);
+        }
+
+        if (!$this->passkeyChallengeStore->consumeChallenge($email, $challenge, 'login')) {
+            return $this->json([
+                'error' => 'passkey_challenge_invalid',
+            ], 401);
+        }
+
+        if (!$this->passkeyCredentialStore->hasCredential($email, $credentialId)) {
+            return $this->json([
+                'error' => 'passkey_credential_invalid',
             ], 401);
         }
 

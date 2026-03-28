@@ -368,6 +368,8 @@ export function AdminPage() {
   const [reservationPage, setReservationPage] = useState(1);
   const [reservationStatusFilter, setReservationStatusFilter] =
     useState<AdminReservationStatusFilter>("all");
+  const [reservationEventSlugFilter, setReservationEventSlugFilter] =
+    useState("");
   const [reservationQueryInput, setReservationQueryInput] = useState("");
   const [reservationSearchQuery, setReservationSearchQuery] = useState("");
   const [isEditorOpen, setEditorOpen] = useState(false);
@@ -442,6 +444,10 @@ export function AdminPage() {
             page: reservationPage,
             perPage: RESERVATIONS_PER_PAGE,
             status: reservationStatusFilter,
+            eventSlug:
+              reservationEventSlugFilter.length > 0
+                ? reservationEventSlugFilter
+                : undefined,
             query: reservationSearchQuery,
           }),
         ]);
@@ -475,7 +481,13 @@ export function AdminPage() {
     return () => {
       isMounted = false;
     };
-  }, [reloadNonce, reservationPage, reservationStatusFilter, reservationSearchQuery]);
+  }, [
+    reloadNonce,
+    reservationPage,
+    reservationStatusFilter,
+    reservationEventSlugFilter,
+    reservationSearchQuery,
+  ]);
 
   const metrics = useMemo(
     () => buildMetrics(events, reservationMeta?.total_items ?? reservations.length),
@@ -488,8 +500,21 @@ export function AdminPage() {
     [reservations],
   );
 
+  const reservationEventFilterOptions = useMemo(
+    () =>
+      [...events]
+        .sort((left, right) => left.title.localeCompare(right.title))
+        .map((event) => ({
+          slug: event.slug,
+          title: event.title,
+        })),
+    [events],
+  );
+
   const isReservationFilterActive =
-    reservationStatusFilter !== "all" || reservationSearchQuery.length > 0;
+    reservationStatusFilter !== "all" ||
+    reservationEventSlugFilter.length > 0 ||
+    reservationSearchQuery.length > 0;
 
   const canGoToPreviousReservationPage = (reservationMeta?.page ?? 1) > 1;
   const canGoToNextReservationPage =
@@ -665,6 +690,13 @@ export function AdminPage() {
     }
 
     setReservationStatusFilter(nextValue);
+    setReservationPage(1);
+  };
+
+  const handleReservationEventFilterChange = (
+    event: ChangeEvent<HTMLSelectElement>,
+  ) => {
+    setReservationEventSlugFilter(event.target.value);
     setReservationPage(1);
   };
 
@@ -1020,6 +1052,21 @@ export function AdminPage() {
                   <option value="all">All</option>
                   <option value="confirmed">Confirmed</option>
                   <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+
+              <label className="admin-reservation-filter-label">
+                Event
+                <select
+                  value={reservationEventSlugFilter}
+                  onChange={handleReservationEventFilterChange}
+                >
+                  <option value="">All events</option>
+                  {reservationEventFilterOptions.map((eventOption) => (
+                    <option key={eventOption.slug} value={eventOption.slug}>
+                      {eventOption.title}
+                    </option>
+                  ))}
                 </select>
               </label>
 

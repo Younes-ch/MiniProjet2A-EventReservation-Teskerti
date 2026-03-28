@@ -12,6 +12,29 @@ export type AuthLoginResponse = {
   user: AuthUser;
 };
 
+export type PasskeyAllowedCredential = {
+  id: string;
+  type: "public-key";
+};
+
+export type PasskeyOptionsResponse = {
+  challenge: string;
+  timeout: number;
+  rp_id: string;
+  user_verification: string;
+  allow_credentials: PasskeyAllowedCredential[];
+};
+
+export type PasskeyVerifyPayload = {
+  email: string;
+  challenge: string;
+  credential_id: string;
+};
+
+type LogoutResponse = {
+  status: string;
+};
+
 type LoginPayload = {
   email: string;
   password: string;
@@ -75,4 +98,26 @@ export const fetchAuthenticatedUser = (accessToken: string) =>
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
+  });
+
+export const logoutWithRefreshToken = (refreshToken: string) =>
+  requestJson<LogoutResponse>("/api/auth/logout", {
+    method: "POST",
+    body: JSON.stringify({
+      refresh_token: refreshToken,
+    }),
+  });
+
+export const fetchPasskeyOptions = (email: string) =>
+  requestJson<PasskeyOptionsResponse>("/api/auth/passkey/options", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+    }),
+  });
+
+export const verifyPasskeyLogin = (payload: PasskeyVerifyPayload) =>
+  requestJson<AuthLoginResponse>("/api/auth/passkey/verify", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });

@@ -1,6 +1,10 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { loginWithPassword } from "../lib/authClient";
+import {
+  fetchPasskeyOptions,
+  loginWithPassword,
+  verifyPasskeyLogin,
+} from "../lib/authClient";
 import { saveAuthSession } from "../lib/authStorage";
 
 const trustSignals = [
@@ -20,6 +24,7 @@ export function LoginPage() {
   const [email, setEmail] = useState("alex@example.com");
   const [password, setPassword] = useState("Passw0rd!2026");
   const [isSubmitting, setSubmitting] = useState(false);
+  const [isPasskeySubmitting, setPasskeySubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const redirectTimeoutRef = useRef<number | null>(null);
@@ -50,7 +55,62 @@ export function LoginPage() {
       return "Unexpected request format while signing in.";
     }
 
+    if ("email_required" === error.message) {
+      return "Email is required to sign in with passkey.";
+    }
+
+    if ("passkey_not_registered" === error.message) {
+      return "No passkey is registered for this account yet.";
+    }
+
+    if (
+      "passkey_challenge_invalid" === error.message ||
+      "passkey_credential_invalid" === error.message ||
+      "passkey_payload_invalid" === error.message
+    ) {
+      return "Passkey verification failed. Try again.";
+    }
+
     return "Auth service is unavailable. Check your API and try again.";
+  };
+
+  const handlePasskeySubmit = async () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setPasskeySubmitting(true);
+
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const options = await fetchPasskeyOptions(normalizedEmail);
+
+      const firstAllowedCredential = options.allow_credentials[0]?.id ?? "";
+      if (firstAllowedCredential.length === 0) {
+        throw new Error("passkey_not_registered");
+      }
+
+      const response = await verifyPasskeyLogin({
+        email: normalizedEmail,
+        challenge: options.challenge,
+        credential_id: firstAllowedCredential,
+      });
+
+      saveAuthSession({
+        accessToken: response.access_token,
+        refreshToken: response.refresh_token,
+        tokenType: response.token_type,
+        expiresIn: response.expires_in,
+        user: response.user,
+      });
+
+      setSuccessMessage("Signed in with passkey. Redirecting to admin...");
+      redirectTimeoutRef.current = window.setTimeout(() => {
+        navigate("/admin");
+      }, 700);
+    } catch (error) {
+      setErrorMessage(mapAuthErrorMessage(error));
+    } finally {
+      setPasskeySubmitting(false);
+    }
   };
 
   const handlePasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -131,14 +191,17 @@ export function LoginPage() {
         <button
           type="button"
           className="button-primary wide passkey-button"
-          disabled
+          onClick={() => void handlePasskeySubmit()}
+          disabled={isSubmitting || isPasskeySubmitting}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="8" />
             <path d="M9.5 12.2c.7-1.2 2.4-1.6 3.6-.9 1.2.7 1.6 2.4.9 3.6" />
             <path d="M10.2 9.7a4.6 4.6 0 0 1 5 7.6" />
           </svg>
-          Passkey coming in phase 2
+          {isPasskeySubmitting
+            ? "Verifying passkey..."
+            : "Sign in with passkey (phase 2 beta)"}
         </button>
 
         <div className="separator">or fallback to email</div>
