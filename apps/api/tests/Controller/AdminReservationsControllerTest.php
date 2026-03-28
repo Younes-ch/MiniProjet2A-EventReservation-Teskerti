@@ -34,7 +34,7 @@ class AdminReservationsControllerTest extends WebTestCase
         $this->createReservation($client, 'midnight-resonance-2-0', 'Alya One', 'alya1@example.com');
         $this->createReservation($client, 'ephemeral-visions-gallery', 'Alya Two', 'alya2@example.com');
 
-        $client->request('GET', '/api/admin/reservations?limit=20', [], [], [
+        $client->request('GET', '/api/admin/reservations?page=1&per_page=6', [], [], [
             'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
         ]);
 
@@ -45,6 +45,61 @@ class AdminReservationsControllerTest extends WebTestCase
         $this->assertCount(2, $data['items']);
         $this->assertSame('confirmed', $data['items'][0]['status'] ?? null);
         $this->assertArrayHasKey('event', $data['items'][0] ?? []);
+        $this->assertSame(1, $data['meta']['page'] ?? null);
+        $this->assertSame(6, $data['meta']['per_page'] ?? null);
+        $this->assertSame(2, $data['meta']['total_items'] ?? null);
+        $this->assertSame(1, $data['meta']['total_pages'] ?? null);
+        $this->assertSame('all', $data['meta']['status'] ?? null);
+    }
+
+    public function testAdminCanFilterReservationsByStatus(): void
+    {
+        $client = static::createClient();
+        $accessToken = $this->loginAndGetAccessToken($client);
+
+        $this->createReservation($client, 'midnight-resonance-2-0', 'Alya Four', 'alya4@example.com');
+
+        $client->request('GET', '/api/admin/reservations?page=1&per_page=6', [], [], [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ]);
+
+        $listData = $this->decodeResponse($client);
+        $targetId = (int) ($listData['items'][0]['id'] ?? 0);
+
+        $client->request('PATCH', '/api/admin/reservations/'.$targetId.'/status', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ], json_encode([
+            'status' => 'cancelled',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $client->request('GET', '/api/admin/reservations?page=1&per_page=6&status=cancelled', [], [], [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $filteredData = $this->decodeResponse($client);
+        $this->assertCount(1, $filteredData['items']);
+        $this->assertSame('cancelled', $filteredData['items'][0]['status'] ?? null);
+        $this->assertSame('cancelled', $filteredData['meta']['status'] ?? null);
+    }
+
+    public function testAdminReservationsListRejectsInvalidStatusFilter(): void
+    {
+        $client = static::createClient();
+        $accessToken = $this->loginAndGetAccessToken($client);
+
+        $client->request('GET', '/api/admin/reservations?status=archived', [], [], [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ]);
+
+        $this->assertResponseStatusCodeSame(400);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('invalid_reservation_status_filter', $data['error'] ?? null);
     }
 
     public function testAdminCanUpdateReservationStatus(): void

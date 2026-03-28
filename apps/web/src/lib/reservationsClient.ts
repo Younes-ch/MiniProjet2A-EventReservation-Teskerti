@@ -35,9 +35,32 @@ export type AdminReservationItem = {
   };
 };
 
+export type AdminReservationStatusFilter = "all" | "confirmed" | "cancelled";
+
+export type AdminReservationsQuery = {
+  page?: number;
+  perPage?: number;
+  status?: AdminReservationStatusFilter;
+  eventSlug?: string;
+  query?: string;
+};
+
+export type AdminReservationsMeta = {
+  page: number;
+  per_page: number;
+  total_items: number;
+  total_pages: number;
+  status: AdminReservationStatusFilter;
+  query: string;
+  event_slug: string;
+};
+
 type AdminReservationsListResponse = {
   items: AdminReservationItem[];
+  meta: AdminReservationsMeta;
 };
+
+export type AdminReservationsListResult = AdminReservationsListResponse;
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -85,9 +108,34 @@ export const createReservation = (payload: CreateReservationPayload) =>
 
 export const fetchAdminReservations = async (
   accessToken: string,
-): Promise<AdminReservationItem[]> => {
+  query?: AdminReservationsQuery,
+): Promise<AdminReservationsListResult> => {
+  const queryParams = new URLSearchParams();
+
+  if (query?.page !== undefined) {
+    queryParams.set("page", query.page.toString());
+  }
+
+  if (query?.perPage !== undefined) {
+    queryParams.set("per_page", query.perPage.toString());
+  }
+
+  if (query?.status && query.status !== "all") {
+    queryParams.set("status", query.status);
+  }
+
+  if (query?.eventSlug && query.eventSlug.trim().length > 0) {
+    queryParams.set("event_slug", query.eventSlug.trim());
+  }
+
+  if (query?.query && query.query.trim().length > 0) {
+    queryParams.set("query", query.query.trim());
+  }
+
+  const queryString = queryParams.toString();
+
   const response = await requestJson<AdminReservationsListResponse>(
-    "/api/admin/reservations",
+    `/api/admin/reservations${queryString.length > 0 ? `?${queryString}` : ""}`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -95,7 +143,7 @@ export const fetchAdminReservations = async (
     },
   );
 
-  return response.items;
+  return response;
 };
 
 export const updateAdminReservationStatus = (

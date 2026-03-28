@@ -30,16 +30,62 @@ final class AdminReservationsController extends AbstractController
             return $authorizationResult;
         }
 
-        $limitRaw = $request->query->get('limit', '30');
-        $limit = filter_var($limitRaw, FILTER_VALIDATE_INT);
-        if (false === $limit || $limit < 1 || $limit > 100) {
-            $limit = 30;
+        $pageRaw = $request->query->get('page', '1');
+        $page = filter_var($pageRaw, FILTER_VALIDATE_INT);
+        if (false === $page || $page < 1) {
+            $page = 1;
         }
 
-        $reservations = $this->reservationRepository->findRecentWithEvent($limit);
+        $perPageRaw = $request->query->get('per_page', '6');
+        $perPage = filter_var($perPageRaw, FILTER_VALIDATE_INT);
+        if (false === $perPage || $perPage < 1 || $perPage > 50) {
+            $perPage = 6;
+        }
+
+        $statusRaw = strtolower(trim((string) $request->query->get('status', 'all')));
+        if (!in_array($statusRaw, ['all', Reservation::STATUS_CONFIRMED, Reservation::STATUS_CANCELLED], true)) {
+            return $this->json([
+                'error' => 'invalid_reservation_status_filter',
+            ], 400);
+        }
+
+        $eventSlugRaw = trim((string) $request->query->get('event_slug', ''));
+        $searchQueryRaw = trim((string) $request->query->get('query', ''));
+
+        $queryResult = $this->reservationRepository->findRecentWithEventPage(
+            $page,
+            $perPage,
+            'all' === $statusRaw ? null : $statusRaw,
+            '' === $eventSlugRaw ? null : $eventSlugRaw,
+            '' === $searchQueryRaw ? null : $searchQueryRaw,
+        );
+
+        $total = $queryResult['total'];
+        $totalPages = max(1, (int) ceil($total / $perPage));
+
+        if ($page > $totalPages) {
+            $page = $totalPages;
+            $queryResult = $this->reservationRepository->findRecentWithEventPage(
+                $page,
+                $perPage,
+                'all' === $statusRaw ? null : $statusRaw,
+                '' === $eventSlugRaw ? null : $eventSlugRaw,
+                '' === $searchQueryRaw ? null : $searchQueryRaw,
+            );
+            $total = $queryResult['total'];
+        }
 
         return $this->json([
-            'items' => $this->reservationApiView->toList($reservations),
+            'items' => $this->reservationApiView->toList($queryResult['items']),
+            'meta' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total_items' => $total,
+                'total_pages' => $totalPages,
+                'status' => $statusRaw,
+                'query' => $searchQueryRaw,
+                'event_slug' => $eventSlugRaw,
+            ],
         ]);
     }
 
