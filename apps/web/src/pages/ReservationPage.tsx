@@ -214,7 +214,7 @@ export function ReservationPage() {
     null,
   );
   const [selectedSeatLabels, setSelectedSeatLabels] = useState<string[]>([]);
-  const [isModalOpen, setModalOpen] = useState(true);
+  const [isModalOpen, setModalOpen] = useState(false);
   const [formValues, setFormValues] =
     useState<ReservationFormValues>(initialFormValues);
   const [touchedFields, setTouchedFields] = useState<

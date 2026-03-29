@@ -167,60 +167,7 @@ export function TicketsPage() {
         </p>
       )}
 
-      <article className="ticket-feature">
-        <div className="ticket-visual ticket-tone-cyan">
-          <span>Ticket Vault</span>
-        </div>
-        <div className="ticket-main ticket-main-wide">
-          <p className="ticket-kicker">Local history</p>
-          <h2>All your generated passes, in one place</h2>
-          <p className="section-copy">
-            Ticket cards are now generated from your real reservation flow, not
-            static demo data.
-          </p>
-          <ul className="ticket-meta" aria-label="Ticket vault details">
-            <li>Latest ticket highlighted at the top</li>
-            <li>Older reservations shown in archive cards</li>
-            <li>PDF download remains available per ticket</li>
-          </ul>
-          <div className="hero-actions">
-            <button
-              type="button"
-              className="button-primary"
-              onClick={handleDownloadLatestTicket}
-              disabled={!latestTicket}
-            >
-              Download Latest Pass
-            </button>
-            <Link to="/reserve" className="button-secondary">
-              Reserve another event
-            </Link>
-          </div>
-        </div>
-        <aside className="ticket-code" aria-label="Ticket vault stats">
-          <div className="qr-shell" aria-hidden="true" />
-          <p>Stored tickets</p>
-          <strong>{ticketHistory.length}</strong>
-        </aside>
-      </article>
 
-      <div className="ticket-support-grid">
-        <article className="ticket-support-card">
-          <h2>Need assistance with your tickets?</h2>
-          <p>
-            Our support team is available 24/7 to help with entry requirements,
-            ticket transfers, and refund requests.
-          </p>
-          <Link to="/login">Visit Help Center</Link>
-        </article>
-        <article className="ticket-support-card ticket-support-verified">
-          <h2>Verified Aura Pass</h2>
-          <p>
-            Every ticket is cryptographically signed for venue security and
-            guaranteed entry at check-in.
-          </p>
-        </article>
-      </div>
 
       {downloadErrorMessage ? (
         <p className="home-api-state home-api-state-error" role="alert">
