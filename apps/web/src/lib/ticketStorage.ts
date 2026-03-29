@@ -7,6 +7,7 @@ export type LatestTicket = {
   date: string;
   time: string;
   location: string;
+  seatLabels: string[];
   qrCodeToken: string;
   ticketDownloadUrl: string;
 };
@@ -35,6 +36,8 @@ export const loadLatestTicket = (): LatestTicket | null => {
       typeof parsed.date !== "string" ||
       typeof parsed.time !== "string" ||
       typeof parsed.location !== "string" ||
+      !Array.isArray(parsed.seatLabels) ||
+      parsed.seatLabels.some((seatLabel) => typeof seatLabel !== "string") ||
       typeof parsed.qrCodeToken !== "string" ||
       typeof parsed.ticketDownloadUrl !== "string"
     ) {

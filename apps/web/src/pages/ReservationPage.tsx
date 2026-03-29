@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   type ChangeEvent,
   type FormEvent,
   useEffect,
@@ -6,7 +7,12 @@ import {
   useState,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { fetchPublicEventBySlug, type PublicEvent } from "../lib/eventsClient";
+import {
+  fetchPublicEventBySlug,
+  fetchPublicEventSeatMap,
+  type PublicEvent,
+  type PublicEventSeatMap,
+} from "../lib/eventsClient";
 import {
   buildVenueMapDirectionsUrl,
   buildVenueMapEmbedUrl,
@@ -33,11 +39,13 @@ type ReservationConfirmationState = {
   date: string;
   time: string;
   location: string;
+  seatLabels: string[];
   qrCodeToken: string;
   ticketDownloadUrl: string;
 };
 
 const FALLBACK_EVENT_SLUG = "midnight-resonance-2-0";
+const MAX_SEAT_SELECTION = 4;
 
 const initialFormValues: ReservationFormValues = {
   fullName: "",
@@ -138,6 +146,22 @@ const mapReservationErrorMessage = (error: unknown): string => {
     return "Unexpected reservation payload format.";
   }
 
+  if (error.message === "seat_selection_required") {
+    return "Please select at least one seat before confirming.";
+  }
+
+  if (error.message === "seat_selection_invalid") {
+    return "One or more selected seats are invalid. Please choose seats again.";
+  }
+
+  if (error.message === "seat_selection_too_large") {
+    return `You can reserve up to ${MAX_SEAT_SELECTION} seats at once.`;
+  }
+
+  if (error.message === "seats_unavailable") {
+    return "Some selected seats are no longer available. Pick different seats and retry.";
+  }
+
   return "Unable to confirm reservation right now.";
 };
 
@@ -175,6 +199,10 @@ export function ReservationPage() {
   const [selectedEvent, setSelectedEvent] = useState<PublicEvent | null>(null);
   const [isEventLoading, setEventLoading] = useState(true);
   const [eventLoadError, setEventLoadError] = useState<string | null>(null);
+  const [seatMap, setSeatMap] = useState<PublicEventSeatMap | null>(null);
+  const [isSeatMapLoading, setSeatMapLoading] = useState(true);
+  const [seatMapError, setSeatMapError] = useState<string | null>(null);
+  const [selectedSeatLabels, setSelectedSeatLabels] = useState<string[]>([]);
   const [isModalOpen, setModalOpen] = useState(true);
   const [formValues, setFormValues] =
     useState<ReservationFormValues>(initialFormValues);
@@ -197,6 +225,28 @@ export function ReservationPage() {
     [formValues],
   );
   const isFormValid = Object.keys(formErrors).length === 0;
+
+  const seatStatusByLabel = useMemo(() => {
+    const entries =
+      seatMap?.items.map((item): [string, "available" | "reserved"] => [
+        item.label,
+        item.status,
+      ]) ?? [];
+    return new Map(entries);
+  }, [seatMap]);
+
+  const selectedSeatSet = useMemo(
+    () => new Set(selectedSeatLabels),
+    [selectedSeatLabels],
+  );
+
+  const availableSeatCount = useMemo(() => {
+    if (!seatMap) {
+      return 0;
+    }
+
+    return seatMap.items.filter((item) => item.status === "available").length;
+  }, [seatMap]);
 
   const shouldShowFieldError = (field: keyof ReservationFormValues) => {
     if (!submitAttempted && !touchedFields[field]) {
@@ -221,6 +271,30 @@ export function ReservationPage() {
       ...current,
       [field]: true,
     }));
+  };
+
+  const handleSeatToggle = (seatLabel: string) => {
+    const seatStatus = seatStatusByLabel.get(seatLabel);
+    if (seatStatus !== "available" || isSubmitting) {
+      return;
+    }
+
+    if (
+      !selectedSeatSet.has(seatLabel) &&
+      selectedSeatLabels.length >= MAX_SEAT_SELECTION
+    ) {
+      setSubmitErrorMessage(
+        `You can reserve up to ${MAX_SEAT_SELECTION} seats at once.`,
+      );
+      return;
+    }
+
+    setSubmitErrorMessage(null);
+    setSelectedSeatLabels((current) =>
+      current.includes(seatLabel)
+        ? current.filter((label) => label !== seatLabel)
+        : [...current, seatLabel],
+    );
   };
 
   useEffect(() => {
@@ -249,31 +323,50 @@ export function ReservationPage() {
 
     const loadEvent = async () => {
       setEventLoading(true);
+      setSeatMapLoading(true);
       setEventLoadError(null);
+      setSeatMapError(null);
+      setSelectedSeatLabels([]);
 
       try {
-        const payload = await fetchPublicEventBySlug(selectedEventSlug);
+        const [eventPayload, seatMapPayload] = await Promise.all([
+          fetchPublicEventBySlug(selectedEventSlug),
+          fetchPublicEventSeatMap(selectedEventSlug),
+        ]);
 
         if (!isMounted) {
           return;
         }
 
-        setSelectedEvent(payload);
+        setSelectedEvent(eventPayload);
+        setSeatMap(seatMapPayload);
+
+        const firstAvailableSeat = seatMapPayload.items.find(
+          (item) => item.status === "available",
+        );
+        setSelectedSeatLabels(
+          firstAvailableSeat ? [firstAvailableSeat.label] : [],
+        );
       } catch (error) {
         if (!isMounted) {
           return;
         }
 
         setSelectedEvent(null);
+        setSeatMap(null);
+        setSelectedSeatLabels([]);
 
         if (error instanceof Error && error.message === "event_not_found") {
           setEventLoadError("Selected event is not available.");
+          setSeatMapError("Seat map is unavailable for this event.");
         } else {
           setEventLoadError("Unable to load selected event details.");
+          setSeatMapError("Unable to load seat map right now.");
         }
       } finally {
         if (isMounted) {
           setEventLoading(false);
+          setSeatMapLoading(false);
         }
       }
     };
@@ -290,11 +383,39 @@ export function ReservationPage() {
     setSubmitAttempted(true);
     setSubmitErrorMessage(null);
 
-    if (!isFormValid || !selectedEvent || isEventLoading || eventLoadError) {
-      if (!selectedEvent || isEventLoading || eventLoadError) {
+    if (
+      !isFormValid ||
+      !selectedEvent ||
+      isEventLoading ||
+      eventLoadError ||
+      isSeatMapLoading ||
+      seatMapError
+    ) {
+      if (
+        !selectedEvent ||
+        isEventLoading ||
+        eventLoadError ||
+        isSeatMapLoading ||
+        seatMapError
+      ) {
         setSubmitErrorMessage("This event cannot be reserved right now.");
       }
 
+      return;
+    }
+
+    if (selectedSeatLabels.length === 0) {
+      setSubmitErrorMessage("Select at least one seat to continue.");
+      return;
+    }
+
+    const hasUnavailableSelectedSeat = selectedSeatLabels.some(
+      (seatLabel) => seatStatusByLabel.get(seatLabel) !== "available",
+    );
+    if (hasUnavailableSelectedSeat) {
+      setSubmitErrorMessage(
+        "One or more selected seats are no longer available. Choose seats again.",
+      );
       return;
     }
 
@@ -306,6 +427,7 @@ export function ReservationPage() {
         full_name: formValues.fullName.trim(),
         email: formValues.email.trim(),
         phone: formValues.phone.trim(),
+        seat_labels: selectedSeatLabels,
       });
 
       const confirmationState: ReservationConfirmationState = {
@@ -317,6 +439,7 @@ export function ReservationPage() {
         date: payload.event_date,
         time: payload.event_time,
         location: payload.event_location,
+        seatLabels: payload.seat_labels,
         qrCodeToken: payload.qr_code_token,
         ticketDownloadUrl: payload.ticket_download_url,
       };
@@ -355,7 +478,21 @@ export function ReservationPage() {
   const venueMapDirectionsUrl = selectedEvent
     ? buildVenueMapDirectionsUrl(selectedEvent.location, selectedEvent.city)
     : "";
-  const bookingDisabled = isEventLoading || Boolean(eventLoadError);
+  const bookingDisabled =
+    isEventLoading ||
+    Boolean(eventLoadError) ||
+    isSeatMapLoading ||
+    Boolean(seatMapError) ||
+    availableSeatCount <= 0;
+
+  const hasSeatSelection = selectedSeatLabels.length > 0;
+  const isSeatSelectionAtLimit = selectedSeatLabels.length >= MAX_SEAT_SELECTION;
+
+  const seatGridStyles: CSSProperties | undefined = seatMap
+    ? {
+        gridTemplateColumns: `repeat(${seatMap.layout.columns}, minmax(42px, 1fr))`,
+      }
+    : undefined;
 
   return (
     <>
@@ -427,9 +564,152 @@ export function ReservationPage() {
             Book now
           </button>
           <small>
-            {eventLoadError ?? "Non-refundable. Limited tickets remaining."}
+            {eventLoadError ??
+              seatMapError ??
+              (!isSeatMapLoading && availableSeatCount <= 0
+                ? "No seats are currently available for this event."
+                : "Non-refundable. Limited tickets remaining.")}
           </small>
         </aside>
+      </section>
+
+      <section
+        className="reservation-seat-map section-block"
+        aria-labelledby="seat-map-title"
+      >
+        <header className="reservation-seat-map-header">
+          <div>
+            <h2 id="seat-map-title">Choose your seats</h2>
+            <p>
+              Pick up to {MAX_SEAT_SELECTION} seats. Availability is synced with
+              recent reservations.
+            </p>
+          </div>
+          <div className="reservation-seat-counters" aria-live="polite">
+            <div className="reservation-seat-counter">
+              <strong>{selectedSeatLabels.length}</strong>
+              <span>selected</span>
+            </div>
+            <div className="reservation-seat-counter reservation-seat-counter-secondary">
+              <strong>{availableSeatCount}</strong>
+              <span>available</span>
+            </div>
+          </div>
+        </header>
+
+        {isSeatMapLoading ? (
+          <p className="home-api-state" role="status">
+            Loading seat map...
+          </p>
+        ) : null}
+
+        {seatMapError ? (
+          <p className="home-api-state home-api-state-error" role="alert">
+            {seatMapError}
+          </p>
+        ) : null}
+
+        {seatMap ? (
+          <>
+            <div
+              className="reservation-seat-legend"
+              aria-label="Seat status legend"
+            >
+              <span>
+                <i
+                  className="reservation-seat-dot reservation-seat-dot-available"
+                  aria-hidden="true"
+                />
+                Available
+              </span>
+              <span>
+                <i
+                  className="reservation-seat-dot reservation-seat-dot-selected"
+                  aria-hidden="true"
+                />
+                Selected
+              </span>
+              <span>
+                <i
+                  className="reservation-seat-dot reservation-seat-dot-reserved"
+                  aria-hidden="true"
+                />
+                Reserved
+              </span>
+            </div>
+
+            <div className="reservation-seat-grid-shell">
+              <p className="reservation-seat-stage" aria-hidden="true">
+                Stage
+              </p>
+
+              <div
+                className="reservation-seat-grid"
+                style={seatGridStyles}
+                role="grid"
+                aria-label="Seat selection grid"
+              >
+                {seatMap.items.map((seat) => {
+                  const isReserved = seat.status === "reserved";
+                  const isSelected = selectedSeatSet.has(seat.label);
+                  const isLockedByLimit =
+                    isSeatSelectionAtLimit && !isSelected && !isReserved;
+
+                  const seatStateClass = isReserved
+                    ? "reservation-seat-button-reserved"
+                    : isSelected
+                      ? "reservation-seat-button-selected"
+                      : isLockedByLimit
+                        ? "reservation-seat-button-locked"
+                        : "reservation-seat-button-available";
+
+                  const seatStateLabel = isReserved
+                    ? "reserved"
+                    : isSelected
+                      ? "selected"
+                      : isLockedByLimit
+                        ? "temporarily locked"
+                        : "available";
+
+                  return (
+                    <button
+                      key={seat.label}
+                      type="button"
+                      className={`reservation-seat-button ${seatStateClass}`}
+                      disabled={isReserved || isLockedByLimit || isSubmitting}
+                      aria-pressed={isSelected}
+                      aria-label={`${seat.label} ${seatStateLabel}`}
+                      aria-describedby="reservation-seat-summary"
+                      onClick={() => handleSeatToggle(seat.label)}
+                    >
+                      {seat.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <p
+              id="reservation-seat-summary"
+              className="reservation-seat-summary"
+              aria-live="polite"
+            >
+              {hasSeatSelection
+                ? `Selected seats: ${selectedSeatLabels.join(", ")}`
+                : "No seats selected yet."}
+            </p>
+
+            <p className="reservation-seat-helper" aria-live="polite">
+              {isSeatSelectionAtLimit
+                ? `Maximum of ${MAX_SEAT_SELECTION} seats selected. Deselect one to choose another.`
+                : `You can select ${MAX_SEAT_SELECTION - selectedSeatLabels.length} more seat${
+                    MAX_SEAT_SELECTION - selectedSeatLabels.length === 1
+                      ? ""
+                      : "s"
+                  }.`}
+            </p>
+          </>
+        ) : null}
       </section>
 
       <section
@@ -591,6 +871,13 @@ export function ReservationPage() {
                   {formErrors.phone}
                 </span>
               ) : null}
+
+              <p className="reservation-seat-modal-summary">
+                Seats:{" "}
+                {selectedSeatLabels.length > 0
+                  ? selectedSeatLabels.join(", ")
+                  : "Not selected"}
+              </p>
 
               {submitErrorMessage ? (
                 <p className="reservation-submit-error" role="alert">
