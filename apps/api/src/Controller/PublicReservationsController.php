@@ -2,9 +2,11 @@
 
 namespace App\Controller;
 
+use App\Entity\Event;
 use App\Entity\Reservation;
 use App\Repository\EventRepository;
 use App\Repository\ReservationRepository;
+use App\Reservation\ReservationNotificationService;
 use App\Reservation\SeatMapBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -22,6 +24,7 @@ final class PublicReservationsController extends AbstractController
         private readonly ReservationRepository $reservationRepository,
         private readonly SeatMapBuilder $seatMapBuilder,
         private readonly EntityManagerInterface $entityManager,
+        private readonly ReservationNotificationService $notificationService,
     ) {
     }
 
@@ -39,6 +42,7 @@ final class PublicReservationsController extends AbstractController
         $fullName = trim((string) ($payload['full_name'] ?? ''));
         $email = trim((string) ($payload['email'] ?? ''));
         $phone = trim((string) ($payload['phone'] ?? ''));
+        $waitlistIfFull = filter_var($payload['waitlist_if_full'] ?? false, FILTER_VALIDATE_BOOL);
 
         if ('' === $eventSlug || '' === $fullName || '' === $email || '' === $phone) {
             return $this->json([
@@ -112,6 +116,10 @@ final class PublicReservationsController extends AbstractController
         }
 
         if ([] === $selectedSeatLabels) {
+            if ($waitlistIfFull) {
+                return $this->createWaitlistedReservation($event, $fullName, $email, $phone);
+            }
+
             return $this->json([
                 'error' => 'seats_unavailable',
                 'seats' => [],
@@ -140,6 +148,10 @@ final class PublicReservationsController extends AbstractController
         }
 
         if ([] !== $unavailableSeatLabels || count($selectedSeatLabels) > $event->getSeatsAvailable()) {
+            if ($waitlistIfFull) {
+                return $this->createWaitlistedReservation($event, $fullName, $email, $phone);
+            }
+
             return $this->json([
                 'error' => 'seats_unavailable',
                 'seats' => [] !== $unavailableSeatLabels ? $unavailableSeatLabels : $selectedSeatLabels,
@@ -165,6 +177,15 @@ final class PublicReservationsController extends AbstractController
         $this->entityManager->persist($reservation);
         $this->entityManager->flush();
 
+        $ticketDownloadPath = sprintf('/api/reservations/%s/ticket.pdf?token=%s', $reservationId, $qrCodeToken);
+        $calendarDownloadPath = sprintf('/api/reservations/%s/calendar.ics?token=%s', $reservationId, $qrCodeToken);
+
+        $this->notificationService->sendConfirmedReservationEmail(
+            $reservation,
+            $this->toAbsoluteUrl($request, $ticketDownloadPath),
+            $this->toAbsoluteUrl($request, $calendarDownloadPath),
+        );
+
         $startsAt = $event->getStartsAt();
         $eventDate = $startsAt->format('F j, Y');
         $eventTime = $startsAt->format('H:i');
@@ -179,10 +200,57 @@ final class PublicReservationsController extends AbstractController
             'event_date' => $eventDate,
             'event_time' => $eventTime,
             'event_location' => $event->getLocation().', '.$event->getCity(),
+            'status' => Reservation::STATUS_CONFIRMED,
             'seat_labels' => $selectedSeatLabels,
             'qr_code_token' => $qrCodeToken,
-            'ticket_download_url' => sprintf('/api/reservations/%s/ticket.pdf?token=%s', $reservationId, $qrCodeToken),
+            'ticket_download_url' => $ticketDownloadPath,
+            'calendar_download_url' => $calendarDownloadPath,
+            'waitlist_position' => null,
         ], 201);
+    }
+
+    #[Route('/api/reservations/waitlist', name: 'api_public_reservations_waitlist', methods: ['POST'])]
+    public function joinWaitlist(Request $request): JsonResponse
+    {
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $eventSlug = trim((string) ($payload['event_slug'] ?? ''));
+        $fullName = trim((string) ($payload['full_name'] ?? ''));
+        $email = trim((string) ($payload['email'] ?? ''));
+        $phone = trim((string) ($payload['phone'] ?? ''));
+
+        if ('' === $eventSlug || '' === $fullName || '' === $email || '' === $phone) {
+            return $this->json([
+                'error' => 'reservation_fields_required',
+            ], 400);
+        }
+
+        $phoneDigits = preg_replace('/\D+/', '', $phone);
+        if (false === filter_var($email, FILTER_VALIDATE_EMAIL) || null === $phoneDigits || strlen($phoneDigits) < 10) {
+            return $this->json([
+                'error' => 'invalid_reservation_payload',
+            ], 400);
+        }
+
+        $event = $this->eventRepository->findOneBySlug($eventSlug);
+        if (null === $event) {
+            return $this->json([
+                'error' => 'event_not_found',
+            ], 404);
+        }
+
+        if ($event->getSeatsAvailable() > 0) {
+            return $this->json([
+                'error' => 'event_not_sold_out',
+            ], 409);
+        }
+
+        return $this->createWaitlistedReservation($event, $fullName, $email, $phone);
     }
 
     #[Route('/api/reservations/{reservationId}/ticket.pdf', name: 'api_public_reservations_ticket_pdf', methods: ['GET'])]
@@ -202,6 +270,12 @@ final class PublicReservationsController extends AbstractController
             ], 404);
         }
 
+        if (Reservation::STATUS_CONFIRMED !== $reservation->getStatus()) {
+            return $this->json([
+                'error' => 'reservation_not_confirmed',
+            ], 409);
+        }
+
         $pdf = $this->buildTicketPdf($reservation);
 
         return new Response(
@@ -210,6 +284,41 @@ final class PublicReservationsController extends AbstractController
             [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => sprintf('attachment; filename="ticket-%s.pdf"', $reservation->getReservationId()),
+            ],
+        );
+    }
+
+    #[Route('/api/reservations/{reservationId}/calendar.ics', name: 'api_public_reservations_calendar_ics', methods: ['GET'])]
+    public function downloadCalendarInvite(string $reservationId, Request $request): Response
+    {
+        $token = trim((string) $request->query->get('token', ''));
+        if ('' === $token) {
+            return $this->json([
+                'error' => 'ticket_token_required',
+            ], 400);
+        }
+
+        $reservation = $this->reservationRepository->findOneByReservationIdAndQrCodeToken($reservationId, $token);
+        if (null === $reservation) {
+            return $this->json([
+                'error' => 'ticket_not_found',
+            ], 404);
+        }
+
+        if (Reservation::STATUS_CONFIRMED !== $reservation->getStatus()) {
+            return $this->json([
+                'error' => 'reservation_not_confirmed',
+            ], 409);
+        }
+
+        $ics = $this->buildCalendarInvite($reservation);
+
+        return new Response(
+            $ics,
+            200,
+            [
+                'Content-Type' => 'text/calendar; charset=utf-8',
+                'Content-Disposition' => sprintf('attachment; filename="ticket-%s.ics"', $reservation->getReservationId()),
             ],
         );
     }
@@ -287,7 +396,7 @@ final class PublicReservationsController extends AbstractController
         $seatLabels = $reservation->getSeatLabels();
 
         $lines = [
-            'Tiskerti Event Ticket',
+            'Ticket Ref: '.$reservation->getReservationId(),
             'Reservation ID: '.$reservation->getReservationId(),
             'QR Token: '.$reservation->getQrCodeToken(),
             'Attendee: '.$reservation->getAttendeeName(),
@@ -296,20 +405,33 @@ final class PublicReservationsController extends AbstractController
             'Event: '.($event?->getTitle() ?? 'N/A'),
             'Date: '.($event?->getStartsAt()->format('Y-m-d H:i') ?? 'N/A'),
             'Location: '.(($event?->getLocation() ?? '').' '.($event?->getCity() ?? '')),
+            'Status: Confirmed',
+            'Powered by Tiskerti x EventFlow',
         ];
 
-        return $this->renderSimplePdf($lines);
+        return $this->renderBrandedPdf($lines);
     }
 
     /**
      * @param list<string> $lines
      */
-    private function renderSimplePdf(array $lines): string
+    private function renderBrandedPdf(array $lines): string
     {
         $contentOps = [
+            'q',
+            '0.08 0.16 0.35 rg',
+            '40 774 515 36 re f',
+            'Q',
             'BT',
-            '/F1 12 Tf',
-            '50 780 Td',
+            '/F1 14 Tf',
+            '1 1 1 rg',
+            '50 788 Td',
+            '(Tiskerti x EventFlow Digital Ticket) Tj',
+            'ET',
+            'BT',
+            '/F1 11 Tf',
+            '0.1 0.14 0.22 rg',
+            '50 750 Td',
         ];
 
         $lineCount = count($lines);
@@ -354,5 +476,104 @@ final class PublicReservationsController extends AbstractController
         $pdf .= "startxref\n".$xrefOffset."\n%%EOF";
 
         return $pdf;
+    }
+
+    private function createWaitlistedReservation(
+        Event $event,
+        string $fullName,
+        string $email,
+        string $phone,
+    ): JsonResponse {
+        $eventId = $event->getId();
+        if (null === $eventId) {
+            return $this->json([
+                'error' => 'event_not_found',
+            ], 404);
+        }
+
+        $reservationId = $this->buildReservationId();
+        $qrCodeToken = $this->buildQrCodeToken($reservationId);
+        $waitlistPosition = $this->reservationRepository->countWaitlistedForEvent($eventId) + 1;
+
+        $reservation = (new Reservation())
+            ->setReservationId($reservationId)
+            ->setQrCodeToken($qrCodeToken)
+            ->setAttendeeName($fullName)
+            ->setAttendeeEmail($email)
+            ->setAttendeePhone($phone)
+            ->setStatus(Reservation::STATUS_WAITLISTED)
+            ->setSeatLabels([])
+            ->setEvent($event)
+            ->setCreatedAt(new \DateTimeImmutable());
+
+        $this->entityManager->persist($reservation);
+        $this->entityManager->flush();
+
+        $this->notificationService->sendWaitlistEmail($reservation, $waitlistPosition);
+
+        $startsAt = $event->getStartsAt();
+
+        return $this->json([
+            'reservation_id' => $reservationId,
+            'attendee_name' => $fullName,
+            'attendee_email' => $email,
+            'attendee_phone' => $phone,
+            'event_slug' => $event->getSlug(),
+            'event_title' => $event->getTitle(),
+            'event_date' => $startsAt->format('F j, Y'),
+            'event_time' => $startsAt->format('H:i'),
+            'event_location' => $event->getLocation().', '.$event->getCity(),
+            'status' => Reservation::STATUS_WAITLISTED,
+            'seat_labels' => [],
+            'qr_code_token' => $qrCodeToken,
+            'ticket_download_url' => '',
+            'calendar_download_url' => '',
+            'waitlist_position' => $waitlistPosition,
+        ], 201);
+    }
+
+    private function buildCalendarInvite(Reservation $reservation): string
+    {
+        $event = $reservation->getEvent();
+        $eventStart = $event?->getStartsAt() ?? new \DateTimeImmutable();
+        $eventEnd = $eventStart->modify('+2 hours');
+
+        $lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Tiskerti//Reservations//EN',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            'BEGIN:VEVENT',
+            'UID:'.strtolower($reservation->getReservationId()).'@tiskerti.local',
+            'DTSTAMP:'.gmdate('Ymd\\THis\\Z'),
+            'DTSTART:'.$eventStart->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\\THis\\Z'),
+            'DTEND:'.$eventEnd->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\\THis\\Z'),
+            'SUMMARY:'.$this->escapeIcsText($event?->getTitle() ?? 'Tiskerti Event'),
+            'DESCRIPTION:'.$this->escapeIcsText('Reservation '.$reservation->getReservationId().' for '.$reservation->getAttendeeName()),
+            'LOCATION:'.$this->escapeIcsText(trim(($event?->getLocation() ?? '').', '.($event?->getCity() ?? ''))),
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ];
+
+        return implode("\r\n", $lines)."\r\n";
+    }
+
+    private function escapeIcsText(string $value): string
+    {
+        return str_replace(
+            ["\\", ';', ',', "\n", "\r"],
+            ['\\\\', '\\;', '\\,', '\\n', ''],
+            $value,
+        );
+    }
+
+    private function toAbsoluteUrl(Request $request, string $path): string
+    {
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return rtrim($request->getSchemeAndHttpHost(), '/').$path;
     }
 }

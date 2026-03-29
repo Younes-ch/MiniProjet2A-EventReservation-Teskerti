@@ -14,6 +14,7 @@ class Reservation
 {
     public const STATUS_CONFIRMED = 'confirmed';
     public const STATUS_CANCELLED = 'cancelled';
+    public const STATUS_WAITLISTED = 'waitlisted';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

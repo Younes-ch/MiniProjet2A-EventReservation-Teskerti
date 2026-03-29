@@ -1024,6 +1024,12 @@ select:focus-visible,
   color: #8e2d40;
 }
 
+.admin-reservation-status-waitlisted {
+  background: #fff7eb;
+  border-color: #f3d8a7;
+  color: #8a5d10;
+}
+
 .admin-reservation-pagination {
   display: flex;
   align-items: center;

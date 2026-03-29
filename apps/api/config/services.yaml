@@ -20,6 +20,10 @@ parameters:
     app.passkey_allowed_origins:
         - 'http://localhost:5173'
         - 'http://localhost:8080'
+    app.notifications_from_address: '%env(string:MAIL_FROM_ADDRESS)%'
+    app.smtp_enabled: '%env(bool:SMTP_ENABLED)%'
+    app.smtp_host: '%env(string:SMTP_HOST)%'
+    app.smtp_port: '%env(int:SMTP_PORT)%'
 
 services:
     # default configuration for services in *this* file
@@ -63,6 +67,14 @@ services:
     App\Controller\AuthController:
         arguments:
             $passkeyAllowedOrigins: '%app.passkey_allowed_origins%'
+
+    App\Reservation\ReservationNotificationService:
+        arguments:
+            $shareDir: '%kernel.share_dir%'
+            $fromAddress: '%app.notifications_from_address%'
+            $smtpEnabled: '%app.smtp_enabled%'
+            $smtpHost: '%app.smtp_host%'
+            $smtpPort: '%app.smtp_port%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

@@ -3,6 +3,7 @@
 namespace App\Tests\Controller;
 
 use App\Tests\Support\ResetsDatabaseWithSeedEvents;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class AdminReservationsControllerTest extends WebTestCase
@@ -120,6 +121,36 @@ class AdminReservationsControllerTest extends WebTestCase
 
         $data = $this->decodeResponse($client);
         $this->assertSame('invalid_reservation_status_filter', $data['error'] ?? null);
+    }
+
+    public function testAdminCanFilterWaitlistedReservations(): void
+    {
+        $client = static::createClient();
+        $accessToken = $this->loginAndGetAccessToken($client);
+
+        $this->markEventAsSoldOut('ephemeral-visions-gallery');
+
+        $client->request('POST', '/api/reservations/waitlist', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'event_slug' => 'ephemeral-visions-gallery',
+            'full_name' => 'Alya Waitlist',
+            'email' => 'alya-waitlist@example.com',
+            'phone' => '+212 600 100 100',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(201);
+
+        $client->request('GET', '/api/admin/reservations?page=1&per_page=6&status=waitlisted', [], [], [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $data = $this->decodeResponse($client);
+        $this->assertCount(1, $data['items']);
+        $this->assertSame('waitlisted', $data['items'][0]['status'] ?? null);
+        $this->assertSame('waitlisted', $data['meta']['status'] ?? null);
     }
 
     public function testAdminCanUpdateReservationStatus(): void
@@ -291,6 +322,19 @@ class AdminReservationsControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(201);
 
         return $this->decodeResponse($client);
+    }
+
+    private function markEventAsSoldOut(string $eventSlug): void
+    {
+        /** @var EntityManagerInterface $entityManager */
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+
+        $entityManager->getConnection()->executeStatement(
+            'UPDATE events SET seats_available = 0 WHERE slug = :slug',
+            [
+                'slug' => $eventSlug,
+            ],
+        );
     }
 
     /**
