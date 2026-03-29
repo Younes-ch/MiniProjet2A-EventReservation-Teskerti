@@ -123,7 +123,7 @@ export function HomePage() {
 
   const firstEventSlug = events[0]?.slug;
   const exploreTarget = firstEventSlug
-    ? `/events/${firstEventSlug}`
+    ? `/reserve?event=${firstEventSlug}`
     : "/reserve";
 
   const handleApplySearch = () => {
@@ -287,7 +287,7 @@ export function HomePage() {
                       <strong>{formatEventPrice(event)}</strong>
                     </div>
                     <Link
-                      to={`/events/${event.slug}`}
+                      to={`/reserve?event=${event.slug}`}
                       className="home-event-arrow"
                       aria-label={`Open ${event.title}`}
                     >

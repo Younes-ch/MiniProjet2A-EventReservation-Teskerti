@@ -172,12 +172,18 @@ export function LoginPage() {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail) {
+        setErrorMessage("Please enter your registered email below to sign in with your passkey.");
+        setPasskeySubmitting(false);
+        return;
+      }
+
       const options = await fetchPasskeyOptions(normalizedEmail);
       await completePasskeySignIn(normalizedEmail, options);
 
-      setSuccessMessage("Signed in with passkey. Redirecting to admin...");
+      setSuccessMessage("Signed in with passkey. Redirecting...");
       redirectTimeoutRef.current = window.setTimeout(() => {
-        navigate("/admin");
+        navigate("/");
       }, 700);
     } catch (error) {
       setErrorMessage(mapAuthErrorMessage(error));
@@ -207,10 +213,10 @@ export function LoginPage() {
         await completePasskeySignIn(normalizedEmail, response.passkey_options);
 
         setSuccessMessage(
-          "Signed in with password + passkey. Redirecting to admin...",
+          "Signed in with password + passkey. Redirecting...",
         );
         redirectTimeoutRef.current = window.setTimeout(() => {
-          navigate("/admin");
+          navigate("/");
         }, 700);
 
         return;
@@ -218,9 +224,9 @@ export function LoginPage() {
 
       persistAuthSession(response);
 
-      setSuccessMessage("Signed in successfully. Redirecting to admin...");
+      setSuccessMessage("Signed in successfully. Redirecting...");
       redirectTimeoutRef.current = window.setTimeout(() => {
-        navigate("/admin");
+        navigate("/");
       }, 700);
     } catch (error) {
       setErrorMessage(mapAuthErrorMessage(error));
