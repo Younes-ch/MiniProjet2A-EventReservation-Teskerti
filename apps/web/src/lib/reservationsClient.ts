@@ -41,7 +41,11 @@ export type AdminReservationItem = {
   };
 };
 
-export type AdminReservationStatusFilter = "all" | "confirmed" | "cancelled";
+export type AdminReservationStatusFilter =
+  | "all"
+  | "confirmed"
+  | "cancelled"
+  | "waitlisted";
 
 export type AdminReservationsQuery = {
   page?: number;
@@ -155,7 +159,7 @@ export const fetchAdminReservations = async (
 export const updateAdminReservationStatus = (
   accessToken: string,
   reservationId: number,
-  status: "confirmed" | "cancelled",
+  status: "confirmed" | "cancelled" | "waitlisted",
 ) =>
   requestJson<AdminReservationItem>(
     `/api/admin/reservations/${reservationId}/status`,

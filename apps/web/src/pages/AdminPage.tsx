@@ -74,7 +74,7 @@ type AdminReservationRow = {
   attendeeEmail: string;
   eventTitle: string;
   bookedAt: string;
-  status: "confirmed" | "cancelled";
+  status: "confirmed" | "cancelled" | "waitlisted";
   checkedInAt: string | null;
 };
 
@@ -83,7 +83,10 @@ const RESERVATIONS_PER_PAGE = 6;
 const isAdminReservationStatusFilter = (
   value: string,
 ): value is AdminReservationStatusFilter =>
-  value === "all" || value === "confirmed" || value === "cancelled";
+  value === "all" ||
+  value === "confirmed" ||
+  value === "cancelled" ||
+  value === "waitlisted";
 
 type EventEditorValues = {
   title: string;
@@ -265,15 +268,28 @@ const buildReservationRows = (
     attendeeEmail: reservation.attendee_email,
     eventTitle: reservation.event.title ?? "Unknown event",
     bookedAt: formatDateTime(reservation.created_at),
-    status: reservation.status === "cancelled" ? "cancelled" : "confirmed",
+    status:
+      reservation.status === "cancelled" || reservation.status === "waitlisted"
+        ? reservation.status
+        : "confirmed",
     checkedInAt: reservation.checked_in_at
       ? formatDateTime(reservation.checked_in_at)
       : null,
   }));
 
 const getReservationStatusLabel = (
-  status: "confirmed" | "cancelled",
-): string => (status === "cancelled" ? "Cancelled" : "Confirmed");
+  status: "confirmed" | "cancelled" | "waitlisted",
+): string => {
+  if (status === "cancelled") {
+    return "Cancelled";
+  }
+
+  if (status === "waitlisted") {
+    return "Waitlisted";
+  }
+
+  return "Confirmed";
+};
 
 const toDatetimeLocalValue = (isoDateTime: string): string => {
   const parsedDate = new Date(isoDateTime);
@@ -1476,6 +1492,7 @@ export function AdminPage() {
                   <option value="all">All</option>
                   <option value="confirmed">Confirmed</option>
                   <option value="cancelled">Cancelled</option>
+                  <option value="waitlisted">Waitlisted</option>
                 </select>
               </label>
 
@@ -1581,7 +1598,9 @@ export function AdminPage() {
                       >
                         {reservation.status === "confirmed"
                           ? "Cancel"
-                          : "Reopen"}
+                          : reservation.status === "waitlisted"
+                            ? "Confirm"
+                            : "Reopen"}
                       </button>
                     </div>
                   </li>
