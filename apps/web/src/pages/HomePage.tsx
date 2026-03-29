@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchPublicEvents, type PublicEvent } from "../lib/eventsClient";
 
@@ -57,6 +57,12 @@ export function HomePage() {
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [selectedLocationInput, setSelectedLocationInput] = useState("all");
+  const [selectedDateInput, setSelectedDateInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [appliedLocation, setAppliedLocation] = useState("all");
+  const [appliedDate, setAppliedDate] = useState("");
 
   const loadEvents = useCallback(async () => {
     setIsLoading(true);
@@ -76,10 +82,64 @@ export function HomePage() {
     void loadEvents();
   }, [loadEvents]);
 
+  const availableLocations = useMemo(() => {
+    const unique = new Set<string>();
+
+    for (const event of events) {
+      unique.add(`${event.location}, ${event.city}`);
+    }
+
+    return [...unique].sort((left, right) => left.localeCompare(right));
+  }, [events]);
+
+  const filteredEvents = useMemo(() => {
+    const normalizedSearch = appliedSearch.trim().toLowerCase();
+
+    return events.filter((event) => {
+      const searchableText = [
+        event.title,
+        event.summary,
+        event.category,
+        event.location,
+        event.city,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch =
+        normalizedSearch.length === 0 ||
+        searchableText.includes(normalizedSearch);
+
+      const eventLocation = `${event.location}, ${event.city}`;
+      const matchesLocation =
+        appliedLocation === "all" || eventLocation === appliedLocation;
+
+      const eventDate = event.starts_at.slice(0, 10);
+      const matchesDate = appliedDate.length === 0 || eventDate === appliedDate;
+
+      return matchesSearch && matchesLocation && matchesDate;
+    });
+  }, [events, appliedSearch, appliedLocation, appliedDate]);
+
   const firstEventSlug = events[0]?.slug;
   const exploreTarget = firstEventSlug
     ? `/events/${firstEventSlug}`
     : "/reserve";
+
+  const handleApplySearch = () => {
+    setAppliedSearch(searchInput);
+    setAppliedLocation(selectedLocationInput);
+    setAppliedDate(selectedDateInput);
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput("");
+    setSelectedLocationInput("all");
+    setSelectedDateInput("");
+    setAppliedSearch("");
+    setAppliedLocation("all");
+    setAppliedDate("");
+  };
 
   return (
     <>
@@ -122,22 +182,48 @@ export function HomePage() {
       <section className="home-search" aria-label="Event search shell">
         <label>
           Search events
-          <input type="text" placeholder="Concerts, tech, art..." />
+          <input
+            type="text"
+            placeholder="Concerts, tech, art..."
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+          />
         </label>
         <label>
           Location
-          <select defaultValue="New York, USA">
-            <option>New York, USA</option>
-            <option>Los Angeles, USA</option>
-            <option>Paris, France</option>
+          <select
+            value={selectedLocationInput}
+            onChange={(event) => setSelectedLocationInput(event.target.value)}
+          >
+            <option value="all">All locations</option>
+            {availableLocations.map((location) => (
+              <option key={location} value={location}>
+                {location}
+              </option>
+            ))}
           </select>
         </label>
         <label>
-          Date range
-          <input type="text" placeholder="Select dates" />
+          Date
+          <input
+            type="date"
+            value={selectedDateInput}
+            onChange={(event) => setSelectedDateInput(event.target.value)}
+          />
         </label>
-        <button type="button" className="button-primary home-find-button">
-          Find events
+        <button
+          type="button"
+          className="button-primary home-find-button"
+          onClick={handleApplySearch}
+        >
+          Apply filters
+        </button>
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={handleClearSearch}
+        >
+          Clear
         </button>
       </section>
 
@@ -177,9 +263,9 @@ export function HomePage() {
               Retry
             </button>
           </div>
-        ) : events.length > 0 ? (
+        ) : filteredEvents.length > 0 ? (
           <div className="home-event-grid">
-            {events.map((event) => {
+            {filteredEvents.map((event) => {
               const dateBadge = buildDateBadge(event);
 
               return (
@@ -214,7 +300,7 @@ export function HomePage() {
           </div>
         ) : (
           <p className="home-api-state" role="status">
-            No events are available yet.
+            No events match your filters.
           </p>
         )}
 

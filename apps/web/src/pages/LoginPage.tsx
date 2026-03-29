@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   fetchPasskeyOptions,
   loginWithPassword,
@@ -39,6 +39,11 @@ const persistAuthSession = (response: AuthTokenResponse) => {
 };
 
 export function LoginPage() {
+  const location = useLocation();
+  const locationState = location.state as {
+    noticeMessage?: string;
+    prefillEmail?: string;
+  } | null;
   const [email, setEmail] = useState("alex@example.com");
   const [password, setPassword] = useState("Passw0rd!2026");
   const [isSubmitting, setSubmitting] = useState(false);
@@ -47,6 +52,20 @@ export function LoginPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const redirectTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!locationState) {
+      return;
+    }
+
+    if (locationState.prefillEmail && locationState.prefillEmail.length > 0) {
+      setEmail(locationState.prefillEmail);
+    }
+
+    if (locationState.noticeMessage && locationState.noticeMessage.length > 0) {
+      setSuccessMessage(locationState.noticeMessage);
+    }
+  }, [locationState]);
 
   const buildClientData = (
     type: "webauthn.get" | "webauthn.create",
@@ -272,7 +291,7 @@ export function LoginPage() {
 
           <div className="auth-label-row">
             <label htmlFor="password">Password</label>
-            <Link to="/login">Forgot password?</Link>
+            <Link to="/forgot-password">Forgot password?</Link>
           </div>
           <input
             id="password"
@@ -309,7 +328,8 @@ export function LoginPage() {
         ) : null}
 
         <p className="auth-card-footer">
-          Don&apos;t have an account? <Link to="/login">Create an account</Link>
+          Don&apos;t have an account?{" "}
+          <Link to="/signup">Create an account</Link>
         </p>
       </article>
     </section>

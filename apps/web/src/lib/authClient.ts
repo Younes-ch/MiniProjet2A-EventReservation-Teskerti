@@ -106,6 +106,21 @@ type LoginPayload = {
   password: string;
 };
 
+export type SignupPayload = {
+  email: string;
+  display_name: string;
+  password: string;
+};
+
+export type SignupResponse = {
+  status: "user_created";
+  user: AuthUser;
+};
+
+export type ForgotPasswordResponse = {
+  status: "reset_instructions_sent";
+};
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const buildApiUrl = (path: string) => `${API_BASE_URL}${path}`;
@@ -124,17 +139,31 @@ const extractErrorMessage = (data: unknown): string | null => {
 };
 
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const requestHeaders = new Headers(init?.headers ?? {});
+  if (init?.body !== undefined && init.body !== null && !requestHeaders.has("Content-Type")) {
+    requestHeaders.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(buildApiUrl(path), {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers: requestHeaders,
   });
 
-  const payload = await response
-    .json()
-    .catch(() => ({} as Record<string, unknown>));
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  let payload: unknown;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (!response.ok) {
+      throw new Error("request_failed");
+    }
+
+    throw new Error("invalid_json_response");
+  }
 
   if (!response.ok) {
     const message = extractErrorMessage(payload) ?? "request_failed";
@@ -148,6 +177,18 @@ export const loginWithPassword = (payload: LoginPayload) =>
   requestJson<PasswordLoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+
+export const signupWithPassword = (payload: SignupPayload) =>
+  requestJson<SignupResponse>("/api/auth/signup", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const requestPasswordReset = (email: string) =>
+  requestJson<ForgotPasswordResponse>("/api/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
   });
 
 export const refreshAccessToken = (refreshToken: string) =>

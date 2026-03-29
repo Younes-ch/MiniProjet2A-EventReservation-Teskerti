@@ -1,29 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { loadLatestTicket } from "../lib/ticketStorage";
-
-const compactTickets = [
-  {
-    passType: "Aura Premiere",
-    title: "The Synthesis Collective",
-    date: "Oct 24, 2024 - 7:00 PM",
-    venue: "Grand Horizon Hall, NYC",
-    seat: "Section A, Row 12, Seat 42",
-    passId: "#7782-AX-1",
-    status: "Confirmed",
-    tone: "ticket-tone-indigo",
-  },
-  {
-    passType: "Aura Lounge",
-    title: "Midnight Jazz Sessions",
-    date: "Nov 12, 2024 - 10:30 PM",
-    venue: "The Velvet Room, Chicago",
-    seat: "General Admission - Table 09",
-    passId: "#8829-JZ-4",
-    status: "Early Bird",
-    tone: "ticket-tone-amber",
-  },
-];
+import {
+  loadLatestTicket,
+  loadTicketHistory,
+  type LatestTicket,
+} from "../lib/ticketStorage";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(
   /\/$/,
@@ -43,9 +24,30 @@ const buildTicketDownloadHref = (ticketDownloadUrl: string): string => {
 
 export function TicketsPage() {
   const latestTicket = loadLatestTicket();
+  const ticketHistory = loadTicketHistory();
+  const archivedTickets = ticketHistory.filter(
+    (ticket) => ticket.reservationId !== latestTicket?.reservationId,
+  );
   const [downloadErrorMessage, setDownloadErrorMessage] = useState<
     string | null
   >(null);
+
+  const handleDownloadTicket = (ticket: LatestTicket) => {
+    if (ticket.ticketDownloadUrl.trim().length === 0) {
+      setDownloadErrorMessage(
+        "No generated ticket is available yet. Reserve an event first.",
+      );
+      return;
+    }
+
+    setDownloadErrorMessage(null);
+
+    window.open(
+      buildTicketDownloadHref(ticket.ticketDownloadUrl),
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
 
   const handleDownloadLatestTicket = () => {
     if (!latestTicket || latestTicket.ticketDownloadUrl.trim().length === 0) {
@@ -108,50 +110,65 @@ export function TicketsPage() {
         </article>
       ) : null}
 
-      <div className="ticket-rail">
-        {compactTickets.map((ticket) => (
-          <article className="ticket-card" key={ticket.passId}>
-            <div className={`ticket-visual ${ticket.tone}`}>
-              <span>{ticket.status}</span>
-            </div>
+      {archivedTickets.length > 0 ? (
+        <div className="ticket-rail">
+          {archivedTickets.map((ticket) => (
+            <article className="ticket-card" key={ticket.reservationId}>
+              <div className="ticket-visual ticket-tone-amber">
+                <span>Archived</span>
+              </div>
 
-            <div className="ticket-main">
-              <p className="ticket-kicker">{ticket.passType}</p>
-              <h2>{ticket.title}</h2>
-              <ul className="ticket-meta" aria-label="Ticket details">
-                <li>{ticket.date}</li>
-                <li>{ticket.venue}</li>
-                <li>{ticket.seat}</li>
-              </ul>
-              <button type="button" className="button-secondary wide" disabled>
-                Download as PDF
-              </button>
-            </div>
+              <div className="ticket-main">
+                <p className="ticket-kicker">Ticket</p>
+                <h2>{ticket.eventTitle}</h2>
+                <ul className="ticket-meta" aria-label="Ticket details">
+                  <li>
+                    {ticket.date} - {ticket.time}
+                  </li>
+                  <li>{ticket.location}</li>
+                  <li>{ticket.attendeeName}</li>
+                  {ticket.seatLabels.length > 0 ? (
+                    <li>Seats: {ticket.seatLabels.join(", ")}</li>
+                  ) : null}
+                </ul>
+                <button
+                  type="button"
+                  className="button-secondary wide"
+                  onClick={() => handleDownloadTicket(ticket)}
+                >
+                  Download as PDF
+                </button>
+              </div>
 
-            <aside className="ticket-code" aria-label="Pass identifier">
-              <div className="qr-shell" aria-hidden="true" />
-              <p>Pass ID</p>
-              <strong>{ticket.passId}</strong>
-            </aside>
-          </article>
-        ))}
-      </div>
+              <aside className="ticket-code" aria-label="Pass identifier">
+                <div className="qr-shell" aria-hidden="true" />
+                <p>Pass ID</p>
+                <strong>{ticket.reservationId}</strong>
+              </aside>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="home-api-state" role="status">
+          Your ticket history is empty. Reserve an event to generate tickets.
+        </p>
+      )}
 
       <article className="ticket-feature">
         <div className="ticket-visual ticket-tone-cyan">
-          <span>VIP Pass</span>
+          <span>Ticket Vault</span>
         </div>
         <div className="ticket-main ticket-main-wide">
-          <p className="ticket-kicker">Aura Expo</p>
-          <h2>Future of Digital Arts</h2>
+          <p className="ticket-kicker">Local history</p>
+          <h2>All your generated passes, in one place</h2>
           <p className="section-copy">
-            Includes full access to the VIP lounge, artist meet-and-greet, and
-            priority entry to all interactive exhibits.
+            Ticket cards are now generated from your real reservation flow, not
+            static demo data.
           </p>
-          <ul className="ticket-meta" aria-label="VIP pass details">
-            <li>Dec 05 - Dec 08, 2024</li>
-            <li>The Nexus Plaza, SF</li>
-            <li>All-Access Membership Included</li>
+          <ul className="ticket-meta" aria-label="Ticket vault details">
+            <li>Latest ticket highlighted at the top</li>
+            <li>Older reservations shown in archive cards</li>
+            <li>PDF download remains available per ticket</li>
           </ul>
           <div className="hero-actions">
             <button
@@ -160,17 +177,17 @@ export function TicketsPage() {
               onClick={handleDownloadLatestTicket}
               disabled={!latestTicket}
             >
-              Download Full Pass
+              Download Latest Pass
             </button>
-            <button type="button" className="button-secondary">
-              Add to Apple Wallet
-            </button>
+            <Link to="/reserve" className="button-secondary">
+              Reserve another event
+            </Link>
           </div>
         </div>
-        <aside className="ticket-code" aria-label="Membership identifier">
+        <aside className="ticket-code" aria-label="Ticket vault stats">
           <div className="qr-shell" aria-hidden="true" />
-          <p>Membership ID</p>
-          <strong>VIP-1102-EX</strong>
+          <p>Stored tickets</p>
+          <strong>{ticketHistory.length}</strong>
         </aside>
       </article>
 

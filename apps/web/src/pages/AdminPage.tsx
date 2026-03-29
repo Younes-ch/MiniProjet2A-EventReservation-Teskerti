@@ -3,6 +3,7 @@ import {
   type FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Link } from "react-router-dom";
@@ -485,6 +486,7 @@ export function AdminPage() {
     string | null
   >(null);
   const [isActionSubmitting, setActionSubmitting] = useState(false);
+  const editorSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -625,6 +627,23 @@ export function AdminPage() {
     reservationEventSlugFilter,
     reservationSearchQuery,
   ]);
+
+  useEffect(() => {
+    if (!isEditorOpen || editorMode !== "edit") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      editorSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isEditorOpen, editorMode]);
 
   const metrics = useMemo(
     () =>
@@ -805,6 +824,13 @@ export function AdminPage() {
       await runWithFreshAccessToken((token) =>
         deleteAdminEvent(token, eventId),
       );
+
+      setEvents((current) => current.filter((event) => event.id !== eventId));
+      if (editingEventId === eventId) {
+        setEditorOpen(false);
+        setEditingEventId(null);
+      }
+      setActionSuccessMessage(`Event "${title}" deleted.`);
       setReloadNonce((previous) => previous + 1);
     } catch (error) {
       setActionErrorMessage(mapCrudErrorMessage(error));
@@ -841,7 +867,10 @@ export function AdminPage() {
     const normalizedReservationCode = checkInReservationCode.trim();
     const normalizedQrToken = checkInQrToken.trim();
 
-    if (normalizedReservationCode.length === 0 || normalizedQrToken.length === 0) {
+    if (
+      normalizedReservationCode.length === 0 ||
+      normalizedQrToken.length === 0
+    ) {
       setActionErrorMessage(
         "Reservation code and QR token are required for check-in.",
       );
@@ -1231,7 +1260,11 @@ export function AdminPage() {
           )}
 
           {isEditorOpen ? (
-            <section className="admin-editor-card" aria-label="Event editor">
+            <section
+              ref={editorSectionRef}
+              className="admin-editor-card"
+              aria-label="Event editor"
+            >
               <header>
                 <h3>
                   {editorMode === "create" ? "Create Event" : "Edit Event"}
@@ -1543,7 +1576,9 @@ export function AdminPage() {
               <input
                 type="text"
                 value={checkInReservationCode}
-                onChange={(event) => setCheckInReservationCode(event.target.value)}
+                onChange={(event) =>
+                  setCheckInReservationCode(event.target.value)
+                }
                 placeholder="Reservation code (e.g. RSV-1A2B-3C4D)"
                 aria-label="Reservation code"
               />

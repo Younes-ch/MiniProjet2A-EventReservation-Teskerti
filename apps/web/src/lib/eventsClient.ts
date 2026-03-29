@@ -18,6 +18,14 @@ type EventsListResponse = {
   items: PublicEvent[];
 };
 
+const isEventsListResponse = (value: unknown): value is EventsListResponse => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  return Array.isArray((value as { items?: unknown }).items);
+};
+
 export type UpsertEventPayload = {
   title: string;
   summary: string;
@@ -66,17 +74,31 @@ const extractErrorMessage = (data: unknown): string | null => {
 };
 
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const requestHeaders = new Headers(init?.headers ?? {});
+  if (init?.body !== undefined && init.body !== null && !requestHeaders.has("Content-Type")) {
+    requestHeaders.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(buildApiUrl(path), {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers: requestHeaders,
   });
 
-  const payload = await response
-    .json()
-    .catch(() => ({} as Record<string, unknown>));
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  let payload: unknown;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (!response.ok) {
+      throw new Error("request_failed");
+    }
+
+    throw new Error("invalid_json_response");
+  }
 
   if (!response.ok) {
     const message = extractErrorMessage(payload) ?? "request_failed";
@@ -87,7 +109,12 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
 };
 
 export const fetchPublicEvents = async (): Promise<PublicEvent[]> => {
-  const response = await requestJson<EventsListResponse>("/api/events");
+  const response = await requestJson<unknown>("/api/events");
+
+  if (!isEventsListResponse(response)) {
+    throw new Error("invalid_response_shape");
+  }
+
   return response.items;
 };
 

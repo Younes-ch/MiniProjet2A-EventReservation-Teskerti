@@ -74,8 +74,12 @@ export function AppLayout() {
           <NavLink to="/" end className={getNavClass}>
             Events
           </NavLink>
-          <span className="nav-muted">Venues</span>
-          <span className="nav-muted">Schedule</span>
+          <NavLink to="/venues" className={getNavClass}>
+            Venues
+          </NavLink>
+          <NavLink to="/schedules" className={getNavClass}>
+            Schedules
+          </NavLink>
           <NavLink to="/tickets" className={getNavClass}>
             My Tickets
           </NavLink>
