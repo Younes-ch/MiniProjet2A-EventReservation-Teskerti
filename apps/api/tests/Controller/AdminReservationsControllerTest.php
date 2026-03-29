@@ -149,6 +149,115 @@ class AdminReservationsControllerTest extends WebTestCase
         $this->assertSame('cancelled', $updatedData['status'] ?? null);
     }
 
+    public function testAdminCanCheckInReservationWithValidTicketToken(): void
+    {
+        $client = static::createClient();
+        $accessToken = $this->loginAndGetAccessToken($client);
+
+        $reservationPayload = $this->createReservation(
+            $client,
+            'midnight-resonance-2-0',
+            'Alya Seven',
+            'alya7@example.com',
+        );
+
+        $client->request('POST', '/api/admin/reservations/check-in', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ], json_encode([
+            'reservation_id' => $reservationPayload['reservation_id'] ?? '',
+            'qr_code_token' => $reservationPayload['qr_code_token'] ?? '',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseIsSuccessful();
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('checked_in', $data['status'] ?? null);
+        $this->assertSame($reservationPayload['reservation_id'] ?? null, $data['reservation']['reservation_id'] ?? null);
+        $this->assertNotNull($data['reservation']['checked_in_at'] ?? null);
+    }
+
+    public function testAdminCheckInRejectsMissingPayloadFields(): void
+    {
+        $client = static::createClient();
+        $accessToken = $this->loginAndGetAccessToken($client);
+
+        $client->request('POST', '/api/admin/reservations/check-in', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ], json_encode([
+            'reservation_id' => '',
+            'qr_code_token' => '',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(400);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('checkin_payload_invalid', $data['error'] ?? null);
+    }
+
+    public function testAdminCheckInReturnsNotFoundForInvalidTicketToken(): void
+    {
+        $client = static::createClient();
+        $accessToken = $this->loginAndGetAccessToken($client);
+
+        $reservationPayload = $this->createReservation(
+            $client,
+            'midnight-resonance-2-0',
+            'Alya Eight',
+            'alya8@example.com',
+        );
+
+        $client->request('POST', '/api/admin/reservations/check-in', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ], json_encode([
+            'reservation_id' => $reservationPayload['reservation_id'] ?? '',
+            'qr_code_token' => 'INVALID-TOKEN',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(404);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('ticket_not_found', $data['error'] ?? null);
+    }
+
+    public function testAdminCheckInRejectsAlreadyCheckedInReservation(): void
+    {
+        $client = static::createClient();
+        $accessToken = $this->loginAndGetAccessToken($client);
+
+        $reservationPayload = $this->createReservation(
+            $client,
+            'midnight-resonance-2-0',
+            'Alya Nine',
+            'alya9@example.com',
+        );
+
+        $requestBody = json_encode([
+            'reservation_id' => $reservationPayload['reservation_id'] ?? '',
+            'qr_code_token' => $reservationPayload['qr_code_token'] ?? '',
+        ], JSON_THROW_ON_ERROR);
+
+        $client->request('POST', '/api/admin/reservations/check-in', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ], $requestBody);
+
+        $this->assertResponseIsSuccessful();
+
+        $client->request('POST', '/api/admin/reservations/check-in', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$accessToken,
+        ], $requestBody);
+
+        $this->assertResponseStatusCodeSame(409);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('reservation_already_checked_in', $data['error'] ?? null);
+        $this->assertNotNull($data['checked_in_at'] ?? null);
+    }
+
     private function loginAndGetAccessToken($client): string
     {
         $client->request('POST', '/api/auth/login', [], [], [
@@ -165,7 +274,10 @@ class AdminReservationsControllerTest extends WebTestCase
         return (string) ($data['access_token'] ?? '');
     }
 
-    private function createReservation($client, string $eventSlug, string $fullName, string $email): void
+    /**
+     * @return array<string, mixed>
+     */
+    private function createReservation($client, string $eventSlug, string $fullName, string $email): array
     {
         $client->request('POST', '/api/reservations', [], [], [
             'CONTENT_TYPE' => 'application/json',
@@ -177,6 +289,8 @@ class AdminReservationsControllerTest extends WebTestCase
         ], JSON_THROW_ON_ERROR));
 
         $this->assertResponseStatusCodeSame(201);
+
+        return $this->decodeResponse($client);
     }
 
     /**

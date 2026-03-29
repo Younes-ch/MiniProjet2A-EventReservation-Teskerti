@@ -27,6 +27,7 @@ export type AdminReservationItem = {
   attendee_phone: string;
   status: string;
   created_at: string;
+  checked_in_at: string | null;
   event: {
     id: number | null;
     slug: string | null;
@@ -162,6 +163,25 @@ export const updateAdminReservationStatus = (
       },
       body: JSON.stringify({
         status,
+      }),
+    },
+  );
+
+export const checkInAdminReservation = (
+  accessToken: string,
+  reservationId: string,
+  qrCodeToken: string,
+) =>
+  requestJson<{ status: string; reservation: AdminReservationItem }>(
+    "/api/admin/reservations/check-in",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        reservation_id: reservationId,
+        qr_code_token: qrCodeToken,
       }),
     },
   );

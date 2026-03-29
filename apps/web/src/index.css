@@ -930,6 +930,21 @@ select:focus-visible,
   padding: 8px 10px;
 }
 
+.admin-checkin-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.admin-checkin-form input {
+  border: 1px solid #d2d9ef;
+  border-radius: 10px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.84rem;
+  padding: 8px 10px;
+}
+
 .admin-reservation-list {
   margin: 0;
   padding: 0;
@@ -971,6 +986,17 @@ select:focus-visible,
 .admin-reservation-meta small {
   color: var(--muted);
   font-size: 0.77rem;
+}
+
+.admin-reservation-checkin {
+  border: 1px solid #bfe7da;
+  border-radius: 999px;
+  background: #eefaf6;
+  color: #146954;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
 }
 
 .admin-reservation-status {
@@ -2584,6 +2610,10 @@ select:focus-visible,
   }
 
   .admin-reservation-search-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-checkin-form {
     grid-template-columns: 1fr;
   }
 
