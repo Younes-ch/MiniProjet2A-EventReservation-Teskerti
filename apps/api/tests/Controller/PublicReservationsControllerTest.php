@@ -41,7 +41,33 @@ class PublicReservationsControllerTest extends WebTestCase
         $this->assertSame('Midnight Resonance 2.0', $data['event_title'] ?? null);
         $this->assertMatchesRegularExpression('/^[A-F0-9]{12}-[a-f0-9]{20}$/', (string) ($data['qr_code_token'] ?? ''));
         $this->assertStringContainsString('/api/reservations/', (string) ($data['ticket_download_url'] ?? ''));
+        $this->assertStringContainsString('/api/reservations/', (string) ($data['calendar_download_url'] ?? ''));
         $this->assertSame(['A-03', 'A-04'], $data['seat_labels'] ?? null);
+    }
+
+    public function testCreateReservationEmailUsesConfiguredPublicBaseUrlForDownloads(): void
+    {
+        $client = static::createClient();
+        $outboxDirectory = $this->mailOutboxDirectory();
+        $this->clearDirectory($outboxDirectory);
+
+        $client->request('POST', '/api/reservations', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'event_slug' => 'midnight-resonance-2-0',
+            'full_name' => 'Mail Link User',
+            'email' => 'mail-link@example.com',
+            'phone' => '+212 633 333 333',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(201);
+
+        $emailPayload = $this->readLatestOutboxEmail($outboxDirectory);
+
+        $this->assertStringContainsString('Ticket PDF: http://localhost:8080/api/reservations/', $emailPayload);
+        $this->assertStringContainsString('/ticket.pdf?token=', $emailPayload);
+        $this->assertStringContainsString('Calendar (ICS): http://localhost:8080/api/reservations/', $emailPayload);
+        $this->assertStringContainsString('/calendar.ics?token=', $emailPayload);
     }
 
     public function testCreateReservationAssignsFallbackSeatWhenSelectionIsMissing(): void
@@ -208,6 +234,7 @@ class PublicReservationsControllerTest extends WebTestCase
         $this->assertSame('waitlisted', $data['status'] ?? null);
         $this->assertSame([], $data['seat_labels'] ?? null);
         $this->assertSame('', $data['ticket_download_url'] ?? null);
+        $this->assertSame('', $data['calendar_download_url'] ?? null);
         $this->assertSame(1, $data['waitlist_position'] ?? null);
     }
 
@@ -303,6 +330,40 @@ class PublicReservationsControllerTest extends WebTestCase
     private function decodeResponse($client): array
     {
         return json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    private function mailOutboxDirectory(): string
+    {
+        return rtrim((string) static::getContainer()->getParameter('kernel.share_dir'), '/\\').DIRECTORY_SEPARATOR.'mail-outbox';
+    }
+
+    private function clearDirectory(string $directory): void
+    {
+        if (!is_dir($directory)) {
+            return;
+        }
+
+        $entries = glob($directory.DIRECTORY_SEPARATOR.'*') ?: [];
+        foreach ($entries as $entry) {
+            if (is_file($entry)) {
+                @unlink($entry);
+            }
+        }
+    }
+
+    private function readLatestOutboxEmail(string $outboxDirectory): string
+    {
+        $emails = glob($outboxDirectory.DIRECTORY_SEPARATOR.'*.eml') ?: [];
+        sort($emails);
+
+        $this->assertNotEmpty($emails, 'Expected at least one generated outbox email message.');
+
+        $latestEmailPath = (string) end($emails);
+        $content = file_get_contents($latestEmailPath);
+
+        $this->assertNotFalse($content, sprintf('Unable to read outbox message at %s.', $latestEmailPath));
+
+        return (string) $content;
     }
 
     private function markEventAsSoldOut(string $eventSlug): void

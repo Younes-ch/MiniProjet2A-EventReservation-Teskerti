@@ -31,6 +31,7 @@ final class PublicReservationsController extends AbstractController
         private readonly SeatMapBuilder $seatMapBuilder,
         private readonly EntityManagerInterface $entityManager,
         private readonly ReservationNotificationService $notificationService,
+        private readonly string $publicBaseUrl,
     ) {
     }
 
@@ -655,6 +656,13 @@ final class PublicReservationsController extends AbstractController
             return $path;
         }
 
-        return rtrim($request->getSchemeAndHttpHost(), '/').$path;
+        $normalizedPath = str_starts_with($path, '/') ? $path : '/'.$path;
+        $configuredBaseUrl = rtrim(trim($this->publicBaseUrl), '/');
+
+        if ('' !== $configuredBaseUrl) {
+            return $configuredBaseUrl.$normalizedPath;
+        }
+
+        return rtrim($request->getSchemeAndHttpHost(), '/').$normalizedPath;
     }
 }

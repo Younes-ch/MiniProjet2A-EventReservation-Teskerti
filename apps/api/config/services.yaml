@@ -26,6 +26,7 @@ parameters:
     app.smtp_enabled: '%env(bool:SMTP_ENABLED)%'
     app.smtp_host: '%env(string:SMTP_HOST)%'
     app.smtp_port: '%env(int:SMTP_PORT)%'
+    app.public_base_url: '%env(string:APP_PUBLIC_BASE_URL)%'
 
 services:
     # default configuration for services in *this* file
@@ -70,6 +71,10 @@ services:
     App\Controller\AuthController:
         arguments:
             $passkeyAllowedOrigins: '%app.passkey_allowed_origins%'
+
+    App\Controller\PublicReservationsController:
+        arguments:
+            $publicBaseUrl: '%app.public_base_url%'
 
     App\Reservation\ReservationNotificationService:
         arguments:
