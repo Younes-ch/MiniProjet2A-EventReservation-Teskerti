@@ -25,7 +25,10 @@ const compactTickets = [
   },
 ];
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(
+  /\/$/,
+  "",
+);
 
 const buildTicketDownloadHref = (ticketDownloadUrl: string): string => {
   if (
@@ -117,11 +120,7 @@ export function TicketsPage() {
                 <li>{ticket.venue}</li>
                 <li>{ticket.seat}</li>
               </ul>
-              <button
-                type="button"
-                className="button-secondary wide"
-                disabled
-              >
+              <button type="button" className="button-secondary wide" disabled>
                 Download as PDF
               </button>
             </div>
