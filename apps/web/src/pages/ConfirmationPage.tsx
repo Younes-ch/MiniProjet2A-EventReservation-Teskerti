@@ -39,10 +39,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(
 );
 
 const buildDownloadHref = (downloadUrl: string): string => {
-  if (
-    downloadUrl.startsWith("http://") ||
-    downloadUrl.startsWith("https://")
-  ) {
+  if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
     return downloadUrl;
   }
 

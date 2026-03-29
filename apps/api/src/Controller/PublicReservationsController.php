@@ -410,7 +410,7 @@ final class PublicReservationsController extends AbstractController
             'eccLevel' => EccLevel::L,
             'svgViewBoxSize' => 120,
         ]);
-        
+
         $qrData = sprintf('teskerti:checkin:%s:%s', $reservationId, $qrCodeToken);
         $qrCodeSvg = (new QRCode($qrOptions))->render($qrData);
         $qrBase64 = 'data:image/svg+xml;base64,' . base64_encode($qrCodeSvg);
