@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchPublicEventBySlug, type PublicEvent } from "../lib/eventsClient";
+import {
+  buildVenueMapDirectionsUrl,
+  buildVenueMapEmbedUrl,
+} from "../lib/mapLinks";
 
 const toneClassByToken: Record<string, string> = {
   indigo: "home-event-tone-indigo",
@@ -138,6 +142,9 @@ export function EventDetailPage() {
     );
   }
 
+  const mapEmbedUrl = buildVenueMapEmbedUrl(event.location, event.city);
+  const mapDirectionsUrl = buildVenueMapDirectionsUrl(event.location, event.city);
+
   return (
     <>
       <section
@@ -180,6 +187,35 @@ export function EventDetailPage() {
           <p>{formatPrice(event)}</p>
           <small>{buildAvailabilityBadge(event)}</small>
         </article>
+      </section>
+
+      <section className="event-detail-map" aria-labelledby="event-detail-map-title">
+        <article className="event-detail-map-copy">
+          <h2 id="event-detail-map-title">Explore the venue map</h2>
+          <p>
+            Browse the neighborhood before you arrive. Zoom in to inspect
+            nearby parking zones, transit stops, and walking paths to the
+            venue.
+          </p>
+          <a
+            className="button-secondary"
+            href={mapDirectionsUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open directions
+          </a>
+        </article>
+
+        <div className="event-detail-map-frame-shell">
+          <iframe
+            className="event-detail-map-frame"
+            title={`Venue map for ${event.title}`}
+            src={mapEmbedUrl}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        </div>
       </section>
 
       <section className="event-detail-note" aria-label="Attendee notice">
