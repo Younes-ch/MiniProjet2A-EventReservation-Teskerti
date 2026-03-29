@@ -37,6 +37,77 @@ class PublicReservationsControllerTest extends WebTestCase
         $this->assertSame('Yassine Builder', $data['attendee_name'] ?? null);
         $this->assertSame('midnight-resonance-2-0', $data['event_slug'] ?? null);
         $this->assertSame('Midnight Resonance 2.0', $data['event_title'] ?? null);
+        $this->assertMatchesRegularExpression('/^[A-F0-9]{12}-[a-f0-9]{20}$/', (string) ($data['qr_code_token'] ?? ''));
+        $this->assertStringContainsString('/api/reservations/', (string) ($data['ticket_download_url'] ?? ''));
+    }
+
+    public function testDownloadTicketPdfReturnsPdfForValidReservationToken(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/reservations', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'event_slug' => 'midnight-resonance-2-0',
+            'full_name' => 'Yassine Builder',
+            'email' => 'yassine@example.com',
+            'phone' => '+212 600 000 000',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(201);
+        $reservationPayload = $this->decodeResponse($client);
+
+        $reservationId = (string) ($reservationPayload['reservation_id'] ?? '');
+        $qrCodeToken = (string) ($reservationPayload['qr_code_token'] ?? '');
+
+        $client->request('GET', sprintf('/api/reservations/%s/ticket.pdf?token=%s', $reservationId, $qrCodeToken));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertResponseHeaderSame('content-type', 'application/pdf');
+
+        $contentDisposition = (string) $client->getResponse()->headers->get('content-disposition', '');
+        $this->assertStringContainsString('ticket-'.$reservationId.'.pdf', $contentDisposition);
+
+        $pdfContent = (string) $client->getResponse()->getContent();
+        $this->assertStringStartsWith('%PDF-1.4', $pdfContent);
+    }
+
+    public function testDownloadTicketPdfRejectsMissingToken(): void
+    {
+        $client = static::createClient();
+
+        $client->request('GET', '/api/reservations/RSV-0000-0000/ticket.pdf');
+
+        $this->assertResponseStatusCodeSame(400);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('ticket_token_required', $data['error'] ?? null);
+    }
+
+    public function testDownloadTicketPdfReturnsNotFoundForInvalidToken(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/reservations', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'event_slug' => 'midnight-resonance-2-0',
+            'full_name' => 'Yassine Builder',
+            'email' => 'yassine@example.com',
+            'phone' => '+212 600 000 000',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(201);
+        $reservationPayload = $this->decodeResponse($client);
+
+        $reservationId = (string) ($reservationPayload['reservation_id'] ?? '');
+
+        $client->request('GET', sprintf('/api/reservations/%s/ticket.pdf?token=INVALID-TOKEN', $reservationId));
+
+        $this->assertResponseStatusCodeSame(404);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('ticket_not_found', $data['error'] ?? null);
     }
 
     public function testCreateReservationRejectsMissingFields(): void

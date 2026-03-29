@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: ReservationRepository::class)]
 #[ORM\Table(name: 'reservations')]
 #[ORM\UniqueConstraint(name: 'uniq_reservations_reservation_id', columns: ['reservation_id'])]
+#[ORM\UniqueConstraint(name: 'uniq_reservations_qr_code_token', columns: ['qr_code_token'])]
 class Reservation
 {
     public const STATUS_CONFIRMED = 'confirmed';
@@ -21,6 +22,9 @@ class Reservation
 
     #[ORM\Column(name: 'reservation_id', length: 32)]
     private string $reservationId = '';
+
+    #[ORM\Column(name: 'qr_code_token', length: 64)]
+    private string $qrCodeToken = '';
 
     #[ORM\Column(name: 'attendee_name', length: 180)]
     private string $attendeeName = '';
@@ -59,6 +63,18 @@ class Reservation
     public function setReservationId(string $reservationId): self
     {
         $this->reservationId = $reservationId;
+
+        return $this;
+    }
+
+    public function getQrCodeToken(): string
+    {
+        return $this->qrCodeToken;
+    }
+
+    public function setQrCodeToken(string $qrCodeToken): self
+    {
+        $this->qrCodeToken = $qrCodeToken;
 
         return $this;
     }

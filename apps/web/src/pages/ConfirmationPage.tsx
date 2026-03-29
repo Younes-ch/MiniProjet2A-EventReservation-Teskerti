@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { loadLatestTicket } from "../lib/ticketStorage";
 
 type ConfirmationState = {
   attendeeName: string;
@@ -10,6 +11,8 @@ type ConfirmationState = {
   date: string;
   time: string;
   location: string;
+  qrCodeToken: string;
+  ticketDownloadUrl: string;
 };
 
 const defaultConfirmationState: ConfirmationState = {
@@ -21,6 +24,21 @@ const defaultConfirmationState: ConfirmationState = {
   date: "October 24, 2024",
   time: "19:00 - 23:00",
   location: "Grand Plaza, NY",
+  qrCodeToken: "",
+  ticketDownloadUrl: "",
+};
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+const buildTicketDownloadHref = (ticketDownloadUrl: string): string => {
+  if (
+    ticketDownloadUrl.startsWith("http://") ||
+    ticketDownloadUrl.startsWith("https://")
+  ) {
+    return ticketDownloadUrl;
+  }
+
+  return `${API_BASE_URL}${ticketDownloadUrl}`;
 };
 
 const reservationMeta = [
@@ -42,11 +60,33 @@ export function ConfirmationPage() {
   const location = useLocation();
   const stateFromNavigation =
     location.state as Partial<ConfirmationState> | null;
+  const latestStoredTicket = loadLatestTicket();
   const [showToast, setShowToast] = useState(Boolean(stateFromNavigation));
+  const [downloadErrorMessage, setDownloadErrorMessage] = useState<
+    string | null
+  >(null);
 
   const confirmationState: ConfirmationState = {
     ...defaultConfirmationState,
+    ...(latestStoredTicket ?? {}),
     ...stateFromNavigation,
+  };
+
+  const handleDownloadTicket = () => {
+    if (confirmationState.ticketDownloadUrl.trim().length === 0) {
+      setDownloadErrorMessage(
+        "Ticket download link is unavailable for this reservation.",
+      );
+      return;
+    }
+
+    setDownloadErrorMessage(null);
+
+    window.open(
+      buildTicketDownloadHref(confirmationState.ticketDownloadUrl),
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   useEffect(() => {
@@ -117,18 +157,35 @@ export function ConfirmationPage() {
             <div className="confirmation-qr-shell" aria-hidden="true" />
             <p>Reservation ID</p>
             <strong>{confirmationState.reservationId}</strong>
+            {confirmationState.qrCodeToken.length > 0 ? (
+              <>
+                <p>QR Token</p>
+                <strong>{confirmationState.qrCodeToken}</strong>
+              </>
+            ) : null}
           </div>
         </div>
       </article>
 
       <div className="confirmation-actions">
-        <button type="button" className="button-primary confirmation-download">
+        <button
+          type="button"
+          className="button-primary confirmation-download"
+          onClick={handleDownloadTicket}
+          disabled={confirmationState.ticketDownloadUrl.trim().length === 0}
+        >
           Download PDF Ticket
         </button>
         <Link to="/" className="button-secondary confirmation-return">
           Back to Events
         </Link>
       </div>
+
+      {downloadErrorMessage ? (
+        <p className="home-api-state home-api-state-error" role="alert">
+          {downloadErrorMessage}
+        </p>
+      ) : null}
 
       <p className="confirmation-help">
         Need help? Reach out to us at

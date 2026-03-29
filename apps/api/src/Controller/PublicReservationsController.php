@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 final class PublicReservationsController extends AbstractController
@@ -56,9 +57,11 @@ final class PublicReservationsController extends AbstractController
         }
 
         $reservationId = $this->buildReservationId();
+        $qrCodeToken = $this->buildQrCodeToken($reservationId);
 
         $reservation = (new Reservation())
             ->setReservationId($reservationId)
+            ->setQrCodeToken($qrCodeToken)
             ->setAttendeeName($fullName)
             ->setAttendeeEmail($email)
             ->setAttendeePhone($phone)
@@ -83,7 +86,38 @@ final class PublicReservationsController extends AbstractController
             'event_date' => $eventDate,
             'event_time' => $eventTime,
             'event_location' => $event->getLocation().', '.$event->getCity(),
+            'qr_code_token' => $qrCodeToken,
+            'ticket_download_url' => sprintf('/api/reservations/%s/ticket.pdf?token=%s', $reservationId, $qrCodeToken),
         ], 201);
+    }
+
+    #[Route('/api/reservations/{reservationId}/ticket.pdf', name: 'api_public_reservations_ticket_pdf', methods: ['GET'])]
+    public function downloadTicketPdf(string $reservationId, Request $request): Response
+    {
+        $token = trim((string) $request->query->get('token', ''));
+        if ('' === $token) {
+            return $this->json([
+                'error' => 'ticket_token_required',
+            ], 400);
+        }
+
+        $reservation = $this->reservationRepository->findOneByReservationIdAndQrCodeToken($reservationId, $token);
+        if (null === $reservation) {
+            return $this->json([
+                'error' => 'ticket_not_found',
+            ], 404);
+        }
+
+        $pdf = $this->buildTicketPdf($reservation);
+
+        return new Response(
+            $pdf,
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => sprintf('attachment; filename="ticket-%s.pdf"', $reservation->getReservationId()),
+            ],
+        );
     }
 
     /**
@@ -115,5 +149,83 @@ final class PublicReservationsController extends AbstractController
         } while (null !== $existing);
 
         return $candidate;
+    }
+
+    private function buildQrCodeToken(string $reservationId): string
+    {
+        return strtoupper(bin2hex(random_bytes(6))).'-'.substr(hash('sha256', $reservationId), 0, 20);
+    }
+
+    private function buildTicketPdf(Reservation $reservation): string
+    {
+        $event = $reservation->getEvent();
+
+        $lines = [
+            'Tiskerti Event Ticket',
+            'Reservation ID: '.$reservation->getReservationId(),
+            'QR Token: '.$reservation->getQrCodeToken(),
+            'Attendee: '.$reservation->getAttendeeName(),
+            'Email: '.$reservation->getAttendeeEmail(),
+            'Event: '.($event?->getTitle() ?? 'N/A'),
+            'Date: '.($event?->getStartsAt()->format('Y-m-d H:i') ?? 'N/A'),
+            'Location: '.(($event?->getLocation() ?? '').' '.($event?->getCity() ?? '')),
+        ];
+
+        return $this->renderSimplePdf($lines);
+    }
+
+    /**
+     * @param list<string> $lines
+     */
+    private function renderSimplePdf(array $lines): string
+    {
+        $contentOps = [
+            'BT',
+            '/F1 12 Tf',
+            '50 780 Td',
+        ];
+
+        $lineCount = count($lines);
+        foreach ($lines as $index => $line) {
+            $escapedLine = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $line);
+            $contentOps[] = sprintf('(%s) Tj', $escapedLine);
+
+            if ($index < $lineCount - 1) {
+                $contentOps[] = '0 -16 Td';
+            }
+        }
+
+        $contentOps[] = 'ET';
+
+        $contentStream = implode("\n", $contentOps)."\n";
+
+        $objects = [
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+            4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            5 => "<< /Length ".strlen($contentStream)." >>\nstream\n".$contentStream."endstream",
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [0];
+
+        for ($i = 1; $i <= 5; ++$i) {
+            $offsets[$i] = strlen($pdf);
+            $pdf .= sprintf("%d 0 obj\n%s\nendobj\n", $i, $objects[$i]);
+        }
+
+        $xrefOffset = strlen($pdf);
+        $pdf .= "xref\n0 6\n";
+        $pdf .= "0000000000 65535 f \n";
+
+        for ($i = 1; $i <= 5; ++$i) {
+            $pdf .= sprintf("%010d 00000 n \n", $offsets[$i]);
+        }
+
+        $pdf .= "trailer\n<< /Size 6 /Root 1 0 R >>\n";
+        $pdf .= "startxref\n".$xrefOffset."\n%%EOF";
+
+        return $pdf;
     }
 }
