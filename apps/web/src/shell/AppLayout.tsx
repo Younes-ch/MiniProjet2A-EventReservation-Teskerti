@@ -20,11 +20,16 @@ export function AppLayout() {
   const [isAuthenticated, setAuthenticated] = useState(
     () => loadAuthSession() !== null,
   );
+  const [isAdmin, setAdmin] = useState(
+    () => loadAuthSession()?.user.roles.includes("ROLE_ADMIN") ?? false,
+  );
   const [isLoggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const syncAuthenticationState = () => {
-      setAuthenticated(loadAuthSession() !== null);
+      const session = loadAuthSession();
+      setAuthenticated(session !== null);
+      setAdmin(session?.user.roles.includes("ROLE_ADMIN") ?? false);
     };
 
     syncAuthenticationState();
@@ -83,9 +88,15 @@ export function AppLayout() {
           <NavLink to="/tickets" className={getNavClass}>
             My Tickets
           </NavLink>
-          <NavLink to="/admin" className={getNavClass}>
-            Admin
-          </NavLink>
+          {isAuthenticated && (isAdmin ? (
+            <NavLink to="/admin" className={getNavClass}>
+              Admin
+            </NavLink>
+          ) : (
+            <NavLink to="/profile" className={getNavClass}>
+              Profile
+            </NavLink>
+          ))}
         </nav>
         {isAuthenticated ? (
           <button

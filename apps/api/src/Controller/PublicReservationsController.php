@@ -14,6 +14,10 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Dompdf\Dompdf;
+use Dompdf\Options;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
 
 final class PublicReservationsController extends AbstractController
 {
@@ -394,88 +398,163 @@ final class PublicReservationsController extends AbstractController
     {
         $event = $reservation->getEvent();
         $seatLabels = $reservation->getSeatLabels();
+        $qrCodeToken = $reservation->getQrCodeToken();
+        $reservationId = $reservation->getReservationId();
 
-        $lines = [
-            'Ticket Ref: '.$reservation->getReservationId(),
-            'Reservation ID: '.$reservation->getReservationId(),
-            'QR Token: '.$reservation->getQrCodeToken(),
-            'Attendee: '.$reservation->getAttendeeName(),
-            'Email: '.$reservation->getAttendeeEmail(),
-            'Seats: '.([] === $seatLabels ? 'N/A' : implode(', ', $seatLabels)),
-            'Event: '.($event?->getTitle() ?? 'N/A'),
-            'Date: '.($event?->getStartsAt()->format('Y-m-d H:i') ?? 'N/A'),
-            'Location: '.(($event?->getLocation() ?? '').' '.($event?->getCity() ?? '')),
-            'Status: Confirmed',
-            'Powered by Tiskerti x EventFlow',
-        ];
+        $qrOptions = new QROptions([
+            'version' => 5,
+            'outputType' => QRCode::OUTPUT_MARKUP_SVG,
+            'eccLevel' => QRCode::ECC_L,
+            'svgViewBoxSize' => 120,
+        ]);
+        
+        $qrData = sprintf('teskerti:checkin:%s:%s', $reservationId, $qrCodeToken);
+        $qrCodeSvg = (new QRCode($qrOptions))->render($qrData);
+        $qrBase64 = 'data:image/svg+xml;base64,' . base64_encode($qrCodeSvg);
 
-        return $this->renderBrandedPdf($lines);
-    }
+        $html = sprintf('
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {
+                    font-family: Helvetica, Arial, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    color: #1a1e29;
+                    background-color: #f7f9fc;
+                }
+                .ticket {
+                    width: 100%%;
+                    max-width: 600px;
+                    margin: 20px auto;
+                    background: #ffffff;
+                    border-radius: 12px;
+                    border: 1px solid #e2e8f0;
+                }
+                .ticket-header {
+                    background-color: #142959;
+                    color: white;
+                    padding: 20px;
+                    border-top-left-radius: 12px;
+                    border-top-right-radius: 12px;
+                    text-align: center;
+                }
+                .ticket-header h1 {
+                    margin: 0;
+                    font-size: 24px;
+                    font-weight: bold;
+                    letter-spacing: 1px;
+                }
+                .ticket-body {
+                    padding: 30px;
+                }
+                .ticket-section {
+                    margin-bottom: 20px;
+                }
+                .ticket-section h2 {
+                    margin: 0 0 5px 0;
+                    font-size: 14px;
+                    color: #64748b;
+                    text-transform: uppercase;
+                }
+                .ticket-section p {
+                    margin: 0;
+                    font-size: 18px;
+                    font-weight: 600;
+                }
+                .ticket-row {
+                    display: table;
+                    width: 100%%;
+                    margin-bottom: 20px;
+                }
+                .ticket-col {
+                    display: table-cell;
+                    width: 50%%;
+                }
+                .qr-container {
+                    text-align: center;
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 2px dashed #e2e8f0;
+                }
+                .qr-container img {
+                    width: 150px;
+                    height: 150px;
+                }
+                .footer {
+                    text-align: center;
+                    margin-top: 20px;
+                    font-size: 12px;
+                    color: #94a3b8;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="ticket">
+                <div class="ticket-header">
+                    <h1>EVENT DIGITAL TICKET</h1>
+                </div>
+                <div class="ticket-body">
+                    <div class="ticket-section">
+                        <h2>Event</h2>
+                        <p>%s</p>
+                    </div>
+                    <div class="ticket-row">
+                        <div class="ticket-col">
+                            <h2>Date & Time</h2>
+                            <p>%s</p>
+                        </div>
+                        <div class="ticket-col">
+                            <h2>Location</h2>
+                            <p>%s</p>
+                        </div>
+                    </div>
+                    <div class="ticket-row">
+                        <div class="ticket-col">
+                            <h2>AttendeeName</h2>
+                            <p>%s</p>
+                        </div>
+                        <div class="ticket-col">
+                            <h2>Seats</h2>
+                            <p>%s</p>
+                        </div>
+                    </div>
+                    <div class="qr-container">
+                        <h2>Scan for Check-in</h2>
+                        <img src="%s" alt="QR Code" />
+                        <p style="font-size: 14px; margin-top: 10px; color: #64748b; font-family: monospace;">%s</p>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <p>Powered by Tiskerti x EventFlow &bull; Ref: %s</p>
+            </div>
+        </body>
+        </html>
+        ',
+            htmlspecialchars($event?->getTitle() ?? 'N/A'),
+            htmlspecialchars($event?->getStartsAt()->format('F j, Y, H:i') ?? 'N/A'),
+            htmlspecialchars(($event?->getLocation() ?? '').', '.($event?->getCity() ?? '')),
+            htmlspecialchars($reservation->getAttendeeName()),
+            htmlspecialchars([] === $seatLabels ? 'General Admission' : implode(', ', $seatLabels)),
+            $qrBase64,
+            htmlspecialchars($reservationId),
+            htmlspecialchars($reservationId)
+        );
 
-    /**
-     * @param list<string> $lines
-     */
-    private function renderBrandedPdf(array $lines): string
-    {
-        $contentOps = [
-            'q',
-            '0.08 0.16 0.35 rg',
-            '40 774 515 36 re f',
-            'Q',
-            'BT',
-            '/F1 14 Tf',
-            '1 1 1 rg',
-            '50 788 Td',
-            '(Tiskerti x EventFlow Digital Ticket) Tj',
-            'ET',
-            'BT',
-            '/F1 11 Tf',
-            '0.1 0.14 0.22 rg',
-            '50 750 Td',
-        ];
+        $options = new Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'Helvetica');
 
-        $lineCount = count($lines);
-        foreach ($lines as $index => $line) {
-            $escapedLine = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $line);
-            $contentOps[] = sprintf('(%s) Tj', $escapedLine);
+        $dompdf = new Dompdf($options);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->loadHtml($html);
+        $dompdf->render();
 
-            if ($index < $lineCount - 1) {
-                $contentOps[] = '0 -16 Td';
-            }
-        }
-
-        $contentOps[] = 'ET';
-
-        $contentStream = implode("\n", $contentOps)."\n";
-
-        $objects = [
-            1 => '<< /Type /Catalog /Pages 2 0 R >>',
-            2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
-            4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-            5 => "<< /Length ".strlen($contentStream)." >>\nstream\n".$contentStream."endstream",
-        ];
-
-        $pdf = "%PDF-1.4\n";
-        $offsets = [0];
-
-        for ($i = 1; $i <= 5; ++$i) {
-            $offsets[$i] = strlen($pdf);
-            $pdf .= sprintf("%d 0 obj\n%s\nendobj\n", $i, $objects[$i]);
-        }
-
-        $xrefOffset = strlen($pdf);
-        $pdf .= "xref\n0 6\n";
-        $pdf .= "0000000000 65535 f \n";
-
-        for ($i = 1; $i <= 5; ++$i) {
-            $pdf .= sprintf("%010d 00000 n \n", $offsets[$i]);
-        }
-
-        $pdf .= "trailer\n<< /Size 6 /Root 1 0 R >>\n";
-        $pdf .= "startxref\n".$xrefOffset."\n%%EOF";
-
-        return $pdf;
+        return $dompdf->output() ?: '';
     }
 
     private function createWaitlistedReservation(

@@ -5,6 +5,7 @@ import {
   loadTicketHistory,
   type LatestTicket,
 } from "../lib/ticketStorage";
+import { QRCodeSVG } from "qrcode.react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(
   /\/$/,
@@ -103,7 +104,13 @@ export function TicketsPage() {
           </div>
 
           <aside className="ticket-code" aria-label="Latest pass identifier">
-            <div className="qr-shell" aria-hidden="true" />
+            <QRCodeSVG
+              value={`teskerti:checkin:${latestTicket.reservationId}:${latestTicket.qrCodeToken}`}
+              size={80}
+              level="M"
+              includeMargin={false}
+              className="ticket-qr-svg"
+            />
             <p>Pass ID</p>
             <strong>{latestTicket.reservationId}</strong>
           </aside>
@@ -141,7 +148,13 @@ export function TicketsPage() {
               </div>
 
               <aside className="ticket-code" aria-label="Pass identifier">
-                <div className="qr-shell" aria-hidden="true" />
+                <QRCodeSVG
+                  value={`teskerti:checkin:${ticket.reservationId}:${ticket.qrCodeToken}`}
+                  size={80}
+                  level="M"
+                  includeMargin={false}
+                  className="ticket-qr-svg"
+                />
                 <p>Pass ID</p>
                 <strong>{ticket.reservationId}</strong>
               </aside>

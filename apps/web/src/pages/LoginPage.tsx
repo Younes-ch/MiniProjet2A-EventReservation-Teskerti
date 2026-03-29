@@ -9,6 +9,10 @@ import {
   verifyPasskeyLogin,
 } from "../lib/authClient";
 import { saveAuthSession } from "../lib/authStorage";
+import {
+  base64UrlToBuffer,
+  preparePasskeyClientData,
+} from "../lib/webauthnUtils";
 
 const trustSignals = [
   {
@@ -67,15 +71,6 @@ export function LoginPage() {
     }
   }, [locationState]);
 
-  const buildClientData = (
-    type: "webauthn.get" | "webauthn.create",
-    challenge: string,
-  ) => ({
-    type,
-    challenge,
-    origin: window.location.origin,
-  });
-
   const completePasskeySignIn = async (
     normalizedEmail: string,
     options: PasskeyOptionsResponse,
@@ -85,11 +80,30 @@ export function LoginPage() {
       throw new Error("passkey_not_registered");
     }
 
+    const allowCredentialsList = options.allow_credentials.map((cred) => ({
+      id: base64UrlToBuffer(cred.id),
+      type: cred.type as "public-key",
+    }));
+
+    const credential = await navigator.credentials.get({
+      publicKey: {
+        challenge: base64UrlToBuffer(options.challenge),
+        rpId: options.rp_id,
+        allowCredentials: allowCredentialsList,
+        userVerification: options.user_verification as UserVerificationRequirement,
+        timeout: options.timeout,
+      },
+    }) as PublicKeyCredential;
+
+    if (!credential) {
+      throw new Error("Passkey login cancelled or failed.");
+    }
+
     const response = await verifyPasskeyLogin({
       email: normalizedEmail,
       challenge: options.challenge,
-      credential_id: firstAllowedCredential,
-      client_data: buildClientData("webauthn.get", options.challenge),
+      credential_id: credential.id,
+      client_data: preparePasskeyClientData("webauthn.get", options.challenge),
     });
 
     persistAuthSession(response);

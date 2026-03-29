@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import { loadLatestTicket } from "../lib/ticketStorage";
 
 type ConfirmationState = {
@@ -170,7 +171,13 @@ export function ConfirmationPage() {
           ) : null}
 
           <div className="confirmation-qr-panel">
-            <div className="confirmation-qr-shell" aria-hidden="true" />
+            <QRCodeSVG
+              value={`teskerti:checkin:${confirmationState.reservationId}:${confirmationState.qrCodeToken}`}
+              size={120}
+              level="M"
+              includeMargin={false}
+              className="confirmation-qr-svg"
+            />
             <p>Reservation ID</p>
             <strong>{confirmationState.reservationId}</strong>
             {confirmationState.qrCodeToken.length > 0 ? (

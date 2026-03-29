@@ -26,6 +26,10 @@ import {
   saveAuthSession,
 } from "../lib/authStorage";
 import {
+  base64UrlToBuffer,
+  preparePasskeyClientData,
+} from "../lib/webauthnUtils";
+import {
   createAdminEvent,
   deleteAdminEvent,
   fetchAdminEvents,
@@ -629,7 +633,7 @@ export function AdminPage() {
   ]);
 
   useEffect(() => {
-    if (!isEditorOpen || editorMode !== "edit") {
+    if (!isEditorOpen) {
       return;
     }
 
@@ -903,18 +907,7 @@ export function AdminPage() {
     }
   };
 
-  const buildPasskeyClientData = (
-    type: "webauthn.get" | "webauthn.create",
-    challenge: string,
-  ) => ({
-    type,
-    challenge,
-    origin: window.location.origin,
-  });
-
   const handlePasskeyEnrollment = async () => {
-    const generatedCredentialId = `demo-passkey-${Date.now().toString(36)}`;
-
     setActionSubmitting(true);
     setActionErrorMessage(null);
     setActionSuccessMessage(null);
@@ -924,12 +917,44 @@ export function AdminPage() {
         fetchPasskeyRegistrationOptions(token, "Admin Dashboard Passkey"),
       );
 
+      const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
+        challenge: base64UrlToBuffer(registrationOptions.challenge),
+        rp: {
+          name: "Teskerti",
+          id: registrationOptions.rp_id,
+        },
+        user: {
+          id: base64UrlToBuffer(btoa(registrationOptions.user.email).replace(/=/g, "")),
+          name: registrationOptions.user.email,
+          displayName: registrationOptions.user.display_name,
+        },
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" },
+          { alg: -257, type: "public-key" }
+        ],
+        authenticatorSelection: {
+          userVerification: "preferred"
+        },
+        timeout: registrationOptions.timeout,
+        attestation: "none",
+      };
+
+      const credential = await navigator.credentials.create({
+        publicKey: publicKeyCredentialCreationOptions,
+      }) as PublicKeyCredential;
+
+      if (!credential) {
+        throw new Error("Passkey creation cancelled or failed.");
+      }
+
+      const generatedCredentialId = credential.id;
+
       const registrationResult = await runWithFreshAccessToken((token) =>
         verifyPasskeyRegistration(token, {
           challenge: registrationOptions.challenge,
           credential_id: generatedCredentialId,
           label: "Admin Dashboard Passkey",
-          client_data: buildPasskeyClientData(
+          client_data: preparePasskeyClientData(
             "webauthn.create",
             registrationOptions.challenge,
           ),

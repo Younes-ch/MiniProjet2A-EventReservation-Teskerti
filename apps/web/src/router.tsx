@@ -5,6 +5,7 @@ import { EventDetailPage } from "./pages/EventDetailPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { ProfilePage } from "./pages/ProfilePage";
 import { ReservationPage } from "./pages/ReservationPage";
 import { SchedulesPage } from "./pages/SchedulesPage";
 import { SignupPage } from "./pages/SignupPage";
@@ -40,6 +41,10 @@ export const router = createBrowserRouter([
       {
         path: "admin",
         element: <AdminPage />,
+      },
+      {
+        path: "profile",
+        element: <ProfilePage />,
       },
       {
         path: "tickets",
