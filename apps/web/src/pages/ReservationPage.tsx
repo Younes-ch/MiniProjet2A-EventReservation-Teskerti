@@ -201,7 +201,11 @@ export function ReservationPage() {
   const [eventLoadError, setEventLoadError] = useState<string | null>(null);
   const [seatMap, setSeatMap] = useState<PublicEventSeatMap | null>(null);
   const [isSeatMapLoading, setSeatMapLoading] = useState(true);
+  const [isSeatMapRefreshing, setSeatMapRefreshing] = useState(false);
   const [seatMapError, setSeatMapError] = useState<string | null>(null);
+  const [lastSeatMapSyncedAt, setLastSeatMapSyncedAt] = useState<
+    string | null
+  >(null);
   const [selectedSeatLabels, setSelectedSeatLabels] = useState<string[]>([]);
   const [isModalOpen, setModalOpen] = useState(true);
   const [formValues, setFormValues] =
@@ -247,6 +251,24 @@ export function ReservationPage() {
 
     return seatMap.items.filter((item) => item.status === "available").length;
   }, [seatMap]);
+
+  const seatMapSyncedTimeLabel = useMemo(() => {
+    if (!lastSeatMapSyncedAt) {
+      return null;
+    }
+
+    const parsed = new Date(lastSeatMapSyncedAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return parsed.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  }, [lastSeatMapSyncedAt]);
 
   const shouldShowFieldError = (field: keyof ReservationFormValues) => {
     if (!submitAttempted && !touchedFields[field]) {
@@ -297,6 +319,81 @@ export function ReservationPage() {
     );
   };
 
+  const handleSeatSelectionReset = () => {
+    if (!seatMap || isSubmitting) {
+      return;
+    }
+
+    const firstAvailableSeat = seatMap.items.find(
+      (item) => item.status === "available",
+    );
+
+    setSelectedSeatLabels(firstAvailableSeat ? [firstAvailableSeat.label] : []);
+    setSubmitErrorMessage(null);
+  };
+
+  const handleSeatSelectionAutoFill = () => {
+    if (!seatMap || isSubmitting) {
+      return;
+    }
+
+    const nextSelection = seatMap.items
+      .filter((item) => item.status === "available")
+      .slice(0, MAX_SEAT_SELECTION)
+      .map((item) => item.label);
+
+    setSelectedSeatLabels(nextSelection);
+    setSubmitErrorMessage(null);
+  };
+
+  const refreshSeatMap = async () => {
+    if (
+      !selectedEvent ||
+      isSubmitting ||
+      isEventLoading ||
+      isSeatMapLoading ||
+      isSeatMapRefreshing
+    ) {
+      return;
+    }
+
+    setSeatMapRefreshing(true);
+    setSeatMapError(null);
+
+    try {
+      const seatMapPayload = await fetchPublicEventSeatMap(selectedEvent.slug);
+      const availableSeatSet = new Set(
+        seatMapPayload.items
+          .filter((item) => item.status === "available")
+          .map((item) => item.label),
+      );
+
+      setSeatMap(seatMapPayload);
+      setSelectedSeatLabels((current) => {
+        const remainingSelected = current
+          .filter((seatLabel) => availableSeatSet.has(seatLabel))
+          .slice(0, MAX_SEAT_SELECTION);
+
+        if (remainingSelected.length > 0) {
+          return remainingSelected;
+        }
+
+        const firstAvailableSeat = seatMapPayload.items.find(
+          (item) => item.status === "available",
+        );
+
+        return firstAvailableSeat ? [firstAvailableSeat.label] : [];
+      });
+
+      setLastSeatMapSyncedAt(new Date().toISOString());
+      setSubmitErrorMessage(null);
+    } catch {
+      setSeatMapError("Unable to refresh seat map right now.");
+    } finally {
+      setSeatMapRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     if (!isModalOpen) {
       return;
@@ -326,6 +423,7 @@ export function ReservationPage() {
       setSeatMapLoading(true);
       setEventLoadError(null);
       setSeatMapError(null);
+      setLastSeatMapSyncedAt(null);
       setSelectedSeatLabels([]);
 
       try {
@@ -340,6 +438,7 @@ export function ReservationPage() {
 
         setSelectedEvent(eventPayload);
         setSeatMap(seatMapPayload);
+        setLastSeatMapSyncedAt(new Date().toISOString());
 
         const firstAvailableSeat = seatMapPayload.items.find(
           (item) => item.status === "available",
@@ -354,6 +453,7 @@ export function ReservationPage() {
 
         setSelectedEvent(null);
         setSeatMap(null);
+  setLastSeatMapSyncedAt(null);
         setSelectedSeatLabels([]);
 
         if (error instanceof Error && error.message === "event_not_found") {
@@ -389,14 +489,16 @@ export function ReservationPage() {
       isEventLoading ||
       eventLoadError ||
       isSeatMapLoading ||
-      seatMapError
+      seatMapError ||
+      isSeatMapRefreshing
     ) {
       if (
         !selectedEvent ||
         isEventLoading ||
         eventLoadError ||
         isSeatMapLoading ||
-        seatMapError
+        seatMapError ||
+        isSeatMapRefreshing
       ) {
         setSubmitErrorMessage("This event cannot be reserved right now.");
       }
@@ -482,11 +584,13 @@ export function ReservationPage() {
     isEventLoading ||
     Boolean(eventLoadError) ||
     isSeatMapLoading ||
+    isSeatMapRefreshing ||
     Boolean(seatMapError) ||
     availableSeatCount <= 0;
 
   const hasSeatSelection = selectedSeatLabels.length > 0;
-  const isSeatSelectionAtLimit = selectedSeatLabels.length >= MAX_SEAT_SELECTION;
+  const isSeatSelectionAtLimit =
+    selectedSeatLabels.length >= MAX_SEAT_SELECTION;
 
   const seatGridStyles: CSSProperties | undefined = seatMap
     ? {
@@ -637,6 +741,52 @@ export function ReservationPage() {
                 Reserved
               </span>
             </div>
+
+            <div
+              className="reservation-seat-toolbar"
+              role="group"
+              aria-label="Seat map actions"
+            >
+              <button
+                type="button"
+                className="reservation-seat-tool-button"
+                disabled={
+                  isSubmitting ||
+                  isSeatMapLoading ||
+                  isSeatMapRefreshing ||
+                  !selectedEvent
+                }
+                onClick={() => {
+                  void refreshSeatMap();
+                }}
+              >
+                {isSeatMapRefreshing ? "Refreshing..." : "Refresh availability"}
+              </button>
+
+              <button
+                type="button"
+                className="reservation-seat-tool-button reservation-seat-tool-button-subtle"
+                disabled={isSubmitting || isSeatMapLoading || availableSeatCount === 0}
+                onClick={handleSeatSelectionAutoFill}
+              >
+                Select best {MAX_SEAT_SELECTION}
+              </button>
+
+              <button
+                type="button"
+                className="reservation-seat-tool-button reservation-seat-tool-button-subtle"
+                disabled={isSubmitting || isSeatMapLoading || availableSeatCount === 0}
+                onClick={handleSeatSelectionReset}
+              >
+                Reset selection
+              </button>
+            </div>
+
+            {seatMapSyncedTimeLabel ? (
+              <p className="reservation-seat-sync-note" aria-live="polite">
+                Availability synced at {seatMapSyncedTimeLabel}
+              </p>
+            ) : null}
 
             <div className="reservation-seat-grid-shell">
               <p className="reservation-seat-stage" aria-hidden="true">

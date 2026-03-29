@@ -2168,6 +2168,56 @@ select:focus-visible,
   background: #8b90a7;
 }
 
+.reservation-seat-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reservation-seat-tool-button {
+  border: 1px solid #bfcaf1;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f4f7ff 0%, #e8efff 100%);
+  color: #1f3174;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 7px 12px;
+  min-height: 36px;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.reservation-seat-tool-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(34, 52, 112, 0.16);
+}
+
+.reservation-seat-tool-button:focus-visible {
+  outline: 2px solid #2249be;
+  outline-offset: 1px;
+}
+
+.reservation-seat-tool-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.reservation-seat-tool-button-subtle {
+  background: #f8faff;
+  border-color: #d0d9f3;
+  color: #35477e;
+}
+
+.reservation-seat-sync-note {
+  margin: -2px 0 0;
+  color: #58658d;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
 .reservation-seat-grid {
   display: grid;
   gap: 6px;
@@ -3014,6 +3064,16 @@ select:focus-visible,
   .reservation-seat-grid {
     gap: 4px;
     padding: 8px;
+  }
+
+  .reservation-seat-toolbar {
+    width: 100%;
+  }
+
+  .reservation-seat-tool-button {
+    flex: 1 1 190px;
+    justify-content: center;
+    text-align: center;
   }
 
   .reservation-seat-button {
