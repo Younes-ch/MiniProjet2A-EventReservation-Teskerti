@@ -20,6 +20,8 @@ parameters:
     app.passkey_allowed_origins:
         - 'http://localhost:5173'
         - 'http://localhost:8080'
+        - 'http://127.0.0.1:5173'
+        - 'http://127.0.0.1:8080'
     app.notifications_from_address: '%env(string:MAIL_FROM_ADDRESS)%'
     app.smtp_enabled: '%env(bool:SMTP_ENABLED)%'
     app.smtp_host: '%env(string:SMTP_HOST)%'
@@ -39,6 +41,7 @@ services:
     App\Auth\InMemoryAuthUserStore:
         arguments:
             $users: '%app.auth_users%'
+            $cachePool: '@cache.app'
 
     App\Auth\InMemoryPasskeyCredentialStore:
         arguments:

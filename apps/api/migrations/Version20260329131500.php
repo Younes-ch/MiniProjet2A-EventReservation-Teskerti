@@ -16,11 +16,11 @@ final class Version20260329131500 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE reservations ADD checked_in_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL');
+        $this->addSql('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL');
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE reservations DROP checked_in_at');
+        $this->addSql('ALTER TABLE reservations DROP COLUMN IF EXISTS checked_in_at');
     }
 }

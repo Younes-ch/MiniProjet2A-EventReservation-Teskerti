@@ -91,6 +91,96 @@ final class AuthController extends AbstractController
         return $this->json($this->buildAuthResponse($user, 'password', false));
     }
 
+    #[Route('/api/auth/signup', name: 'api_auth_signup', methods: ['POST'])]
+    public function signup(Request $request): JsonResponse
+    {
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $email = strtolower(trim((string) ($payload['email'] ?? '')));
+        $displayName = trim((string) ($payload['display_name'] ?? ''));
+        $password = (string) ($payload['password'] ?? '');
+
+        if ('' === $email || '' === $displayName || '' === $password) {
+            return $this->json([
+                'error' => 'signup_payload_invalid',
+            ], 400);
+        }
+
+        if (false === filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $this->json([
+                'error' => 'signup_payload_invalid',
+            ], 400);
+        }
+
+        if (strlen($password) < 8) {
+            return $this->json([
+                'error' => 'signup_password_too_short',
+            ], 400);
+        }
+
+        if (null !== $this->userStore->findByEmail($email)) {
+            return $this->json([
+                'error' => 'signup_email_already_exists',
+            ], 409);
+        }
+
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        if (false === $passwordHash) {
+            return $this->json([
+                'error' => 'signup_failed',
+            ], 500);
+        }
+
+        $created = $this->userStore->createUser($email, $displayName, $passwordHash, ['ROLE_USER']);
+        if (!$created) {
+            return $this->json([
+                'error' => 'signup_failed',
+            ], 500);
+        }
+
+        return $this->json([
+            'status' => 'user_created',
+            'user' => [
+                'email' => $email,
+                'display_name' => $displayName,
+                'roles' => ['ROLE_USER'],
+            ],
+        ], 201);
+    }
+
+    #[Route('/api/auth/forgot-password', name: 'api_auth_forgot_password', methods: ['POST'])]
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $email = strtolower(trim((string) ($payload['email'] ?? '')));
+        if ('' === $email) {
+            return $this->json([
+                'error' => 'email_required',
+            ], 400);
+        }
+
+        if (false === filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $this->json([
+                'error' => 'invalid_email',
+            ], 400);
+        }
+
+        return $this->json([
+            'status' => 'reset_instructions_sent',
+        ]);
+    }
+
     #[Route('/api/auth/refresh', name: 'api_auth_refresh', methods: ['POST'])]
     public function refresh(Request $request): JsonResponse
     {

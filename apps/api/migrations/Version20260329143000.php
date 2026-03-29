@@ -16,12 +16,13 @@ final class Version20260329143000 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $this->addSql("ALTER TABLE reservations ADD seat_labels JSON DEFAULT '[]'::json NOT NULL");
-        $this->addSql('ALTER TABLE reservations ALTER COLUMN seat_labels DROP DEFAULT');
+        $this->addSql('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS seat_labels JSON');
+        $this->addSql("UPDATE reservations SET seat_labels = '[]'::json WHERE seat_labels IS NULL");
+        $this->addSql('ALTER TABLE reservations ALTER COLUMN seat_labels SET NOT NULL');
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE reservations DROP seat_labels');
+        $this->addSql('ALTER TABLE reservations DROP COLUMN IF EXISTS seat_labels');
     }
 }
