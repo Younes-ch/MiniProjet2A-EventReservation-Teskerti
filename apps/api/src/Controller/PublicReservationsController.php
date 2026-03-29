@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Reservation;
 use App\Repository\EventRepository;
 use App\Repository\ReservationRepository;
+use App\Reservation\SeatMapBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -14,9 +15,12 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class PublicReservationsController extends AbstractController
 {
+    private const MAX_SEAT_SELECTION = 4;
+
     public function __construct(
         private readonly EventRepository $eventRepository,
         private readonly ReservationRepository $reservationRepository,
+        private readonly SeatMapBuilder $seatMapBuilder,
         private readonly EntityManagerInterface $entityManager,
     ) {
     }
@@ -56,6 +60,92 @@ final class PublicReservationsController extends AbstractController
             ], 404);
         }
 
+        $eventId = $event->getId();
+        if (null === $eventId) {
+            return $this->json([
+                'error' => 'event_not_found',
+            ], 404);
+        }
+
+        $reservedSeatLabels = $this->reservationRepository->findReservedSeatLabelsForEvent($eventId);
+        $seatMap = $this->seatMapBuilder->buildSeatMap($event->getSeatsTotal(), $reservedSeatLabels);
+
+        $validSeatSet = [];
+        $availableSeatSet = [];
+
+        foreach ($seatMap['items'] as $item) {
+            $label = $item['label'];
+            $status = $item['status'];
+
+            $validSeatSet[$label] = true;
+            if ('available' === $status) {
+                $availableSeatSet[$label] = true;
+            }
+        }
+
+        $hasSeatSelection = array_key_exists('seat_labels', $payload);
+        $selectedSeatLabels = [];
+
+        if ($hasSeatSelection) {
+            $normalizedSeatLabels = $this->normalizeSeatLabels($payload['seat_labels'] ?? null);
+            if (null === $normalizedSeatLabels) {
+                return $this->json([
+                    'error' => 'seat_selection_invalid',
+                ], 400);
+            }
+
+            if ([] === $normalizedSeatLabels) {
+                return $this->json([
+                    'error' => 'seat_selection_required',
+                ], 400);
+            }
+
+            if (count($normalizedSeatLabels) > self::MAX_SEAT_SELECTION) {
+                return $this->json([
+                    'error' => 'seat_selection_too_large',
+                ], 400);
+            }
+
+            $selectedSeatLabels = $normalizedSeatLabels;
+        } else {
+            $selectedSeatLabels = array_slice(array_keys($availableSeatSet), 0, 1);
+        }
+
+        if ([] === $selectedSeatLabels) {
+            return $this->json([
+                'error' => 'seats_unavailable',
+                'seats' => [],
+            ], 409);
+        }
+
+        $invalidSeatLabels = [];
+        $unavailableSeatLabels = [];
+
+        foreach ($selectedSeatLabels as $seatLabel) {
+            if (!isset($validSeatSet[$seatLabel])) {
+                $invalidSeatLabels[] = $seatLabel;
+                continue;
+            }
+
+            if (!isset($availableSeatSet[$seatLabel])) {
+                $unavailableSeatLabels[] = $seatLabel;
+            }
+        }
+
+        if ([] !== $invalidSeatLabels) {
+            return $this->json([
+                'error' => 'seat_selection_invalid',
+                'seats' => $invalidSeatLabels,
+            ], 400);
+        }
+
+        if ([] !== $unavailableSeatLabels || count($selectedSeatLabels) > $event->getSeatsAvailable()) {
+            return $this->json([
+                'error' => 'seats_unavailable',
+                'seats' => [] !== $unavailableSeatLabels ? $unavailableSeatLabels : $selectedSeatLabels,
+            ], 409);
+        }
+
         $reservationId = $this->buildReservationId();
         $qrCodeToken = $this->buildQrCodeToken($reservationId);
 
@@ -66,8 +156,11 @@ final class PublicReservationsController extends AbstractController
             ->setAttendeeEmail($email)
             ->setAttendeePhone($phone)
             ->setStatus(Reservation::STATUS_CONFIRMED)
+            ->setSeatLabels($selectedSeatLabels)
             ->setEvent($event)
             ->setCreatedAt(new \DateTimeImmutable());
+
+        $event->setSeatsAvailable(max($event->getSeatsAvailable() - count($selectedSeatLabels), 0));
 
         $this->entityManager->persist($reservation);
         $this->entityManager->flush();
@@ -86,6 +179,7 @@ final class PublicReservationsController extends AbstractController
             'event_date' => $eventDate,
             'event_time' => $eventTime,
             'event_location' => $event->getLocation().', '.$event->getCity(),
+            'seat_labels' => $selectedSeatLabels,
             'qr_code_token' => $qrCodeToken,
             'ticket_download_url' => sprintf('/api/reservations/%s/ticket.pdf?token=%s', $reservationId, $qrCodeToken),
         ], 201);
@@ -156,9 +250,41 @@ final class PublicReservationsController extends AbstractController
         return strtoupper(bin2hex(random_bytes(6))).'-'.substr(hash('sha256', $reservationId), 0, 20);
     }
 
+    /**
+     * @return list<string>|null
+     */
+    private function normalizeSeatLabels(mixed $seatLabels): ?array
+    {
+        if (!is_array($seatLabels)) {
+            return null;
+        }
+
+        $normalized = [];
+
+        foreach ($seatLabels as $seatLabel) {
+            if (!is_string($seatLabel)) {
+                return null;
+            }
+
+            $value = strtoupper(trim($seatLabel));
+            if ('' === $value) {
+                return null;
+            }
+
+            $normalized[] = $value;
+        }
+
+        if (count($normalized) !== count(array_unique($normalized))) {
+            return null;
+        }
+
+        return $normalized;
+    }
+
     private function buildTicketPdf(Reservation $reservation): string
     {
         $event = $reservation->getEvent();
+        $seatLabels = $reservation->getSeatLabels();
 
         $lines = [
             'Tiskerti Event Ticket',
@@ -166,6 +292,7 @@ final class PublicReservationsController extends AbstractController
             'QR Token: '.$reservation->getQrCodeToken(),
             'Attendee: '.$reservation->getAttendeeName(),
             'Email: '.$reservation->getAttendeeEmail(),
+            'Seats: '.([] === $seatLabels ? 'N/A' : implode(', ', $seatLabels)),
             'Event: '.($event?->getTitle() ?? 'N/A'),
             'Date: '.($event?->getStartsAt()->format('Y-m-d H:i') ?? 'N/A'),
             'Location: '.(($event?->getLocation() ?? '').' '.($event?->getCity() ?? '')),

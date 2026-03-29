@@ -36,6 +36,44 @@ class ReservationRepository extends ServiceEntityRepository
     }
 
     /**
+     * @return list<string>
+     */
+    public function findReservedSeatLabelsForEvent(int $eventId): array
+    {
+        /** @var list<array{seatLabels?: mixed}> $rows */
+        $rows = $this->createQueryBuilder('reservation')
+            ->select('reservation.seatLabels')
+            ->where('IDENTITY(reservation.event) = :eventId')
+            ->andWhere('reservation.status = :status')
+            ->setParameter('eventId', $eventId)
+            ->setParameter('status', Reservation::STATUS_CONFIRMED)
+            ->getQuery()
+            ->getArrayResult();
+
+        $seatLabels = [];
+
+        foreach ($rows as $row) {
+            $rowSeatLabels = $row['seatLabels'] ?? null;
+            if (!is_array($rowSeatLabels)) {
+                continue;
+            }
+
+            foreach ($rowSeatLabels as $seatLabel) {
+                if (!is_string($seatLabel)) {
+                    continue;
+                }
+
+                $normalized = strtoupper(trim($seatLabel));
+                if ('' !== $normalized) {
+                    $seatLabels[$normalized] = true;
+                }
+            }
+        }
+
+        return array_keys($seatLabels);
+    }
+
+    /**
      * @return array{items: list<Reservation>, total: int}
      */
     public function findRecentWithEventPage(
