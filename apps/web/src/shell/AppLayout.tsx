@@ -68,7 +68,7 @@ export function AppLayout() {
       </a>
       <header className="topbar">
         <NavLink to="/" className="brand-link">
-          Aura Events
+          Teskerti
         </NavLink>
         <nav className="topbar-nav" aria-label="Main">
           <NavLink to="/" end className={getNavClass}>
@@ -78,7 +78,7 @@ export function AppLayout() {
             Venues
           </NavLink>
           <NavLink to="/schedules" className={getNavClass}>
-            Schedules
+            Schedule
           </NavLink>
           <NavLink to="/tickets" className={getNavClass}>
             My Tickets

@@ -347,7 +347,7 @@ export function HomePage() {
         aria-label="Community and support links"
       >
         <article>
-          <h3>Aura Events</h3>
+          <h3>Teskerti</h3>
           <p>
             Curating the world&apos;s most premium and unique experiences,
             designed for the curious.

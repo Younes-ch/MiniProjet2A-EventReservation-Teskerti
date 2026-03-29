@@ -646,7 +646,7 @@ export function ReservationPage() {
         <article className="reservation-overview section-block">
           <h2>Experience The Unfolding</h2>
           <p>
-            EventFlow is more than just a conference. It is a curated
+            Teskerti is more than just a conference. It is a curated
             architecture journey through the next decade of technology and
             design. Join industry pioneers as we explore the convergence of
             lucid interfaces, human-centric AI, and the evolving landscape of
@@ -1014,7 +1014,7 @@ export function ReservationPage() {
               <input
                 id="reservation-email"
                 type="email"
-                placeholder="john@auraevents.com"
+                placeholder="john@teskerti.com"
                 autoComplete="email"
                 required
                 value={formValues.email}
@@ -1093,7 +1093,7 @@ export function ReservationPage() {
             <small className="reservation-submit-note" aria-live="polite">
               {isSubmitting
                 ? "Processing your reservation and preparing your pass..."
-                : "Secure payment processed by Aura Events"}
+                : "Secure payment processed by Teskerti"}
             </small>
           </section>
         </div>

@@ -272,7 +272,7 @@ export function LoginPage() {
           </svg>
           {isPasskeySubmitting
             ? "Verifying passkey..."
-            : "Sign in with passkey (phase 2 beta)"}
+            : "Sign in with passkey"}
         </button>
 
         <div className="separator">or fallback to email</div>

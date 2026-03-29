@@ -18,7 +18,7 @@ type ConfirmationState = {
 
 const defaultConfirmationState: ConfirmationState = {
   attendeeName: "John Architect",
-  attendeeEmail: "john@auraevents.com",
+  attendeeEmail: "john@teskerti.com",
   attendeePhone: "+1 (555) 000-0000",
   reservationId: "EF-2944-XF92",
   eventTitle: "The Luminosity Gala 2024",
@@ -116,11 +116,11 @@ export function ConfirmationPage() {
         </p>
       ) : null}
 
-      <div className="confirmation-brand" aria-label="EventFlow">
+      <div className="confirmation-brand" aria-label="Teskerti">
         <span className="confirmation-brand-mark" aria-hidden="true">
           *
         </span>
-        <strong>EventFlow</strong>
+        <strong>Teskerti</strong>
       </div>
 
       <header className="confirmation-head">
@@ -205,11 +205,11 @@ export function ConfirmationPage() {
 
       <p className="confirmation-help">
         Need help? Reach out to us at
-        <a href="mailto:support@eventflow.com"> support@eventflow.com</a>
+        <a href="mailto:support@teskerti.com"> support@teskerti.com</a>
       </p>
 
       <footer className="confirmation-footer" aria-label="Confirmation footer">
-        <small>© 2024 EventFlow Technologies. All rights reserved.</small>
+        <small>© 2026 Teskerti Technologies. All rights reserved.</small>
         <ul>
           <li>
             <Link to="/">Privacy</Link>
