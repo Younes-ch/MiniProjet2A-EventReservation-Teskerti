@@ -2218,6 +2218,27 @@ select:focus-visible,
   line-height: 1.35;
 }
 
+.reservation-seat-toast {
+  margin: -2px 0 0;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  padding: 8px 10px;
+}
+
+.reservation-seat-toast-success {
+  border-color: #b7efe5;
+  background: #e9fbf6;
+  color: #0d6f5e;
+}
+
+.reservation-seat-toast-error {
+  border-color: #f1ccd3;
+  background: #fff2f4;
+  color: #8e2d40;
+}
+
 .reservation-seat-grid {
   display: grid;
   gap: 6px;
