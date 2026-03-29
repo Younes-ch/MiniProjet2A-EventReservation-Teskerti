@@ -18,7 +18,8 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
-use chillerlan\QRCode\Output\QROutputInterface;
+use chillerlan\QRCode\Output\QRMarkupSVG;
+use chillerlan\QRCode\Common\EccLevel;
 
 final class PublicReservationsController extends AbstractController
 {
@@ -404,8 +405,8 @@ final class PublicReservationsController extends AbstractController
 
         $qrOptions = new QROptions([
             'version' => 5,
-            'outputType' => QROutputInterface::MARKUP_SVG,
-            'eccLevel' => QRCode::ECC_L,
+            'outputType' => QRMarkupSVG::class,
+            'eccLevel' => EccLevel::L,
             'svgViewBoxSize' => 120,
         ]);
         

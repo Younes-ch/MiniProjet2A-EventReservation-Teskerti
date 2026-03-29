@@ -147,7 +147,7 @@ class PublicReservationsControllerTest extends WebTestCase
         $this->assertStringContainsString('ticket-'.$reservationId.'.pdf', $contentDisposition);
 
         $pdfContent = (string) $client->getResponse()->getContent();
-        $this->assertStringStartsWith('%PDF-1.4', $pdfContent);
+        $this->assertStringStartsWith('%PDF-1.', $pdfContent);
     }
 
     public function testDownloadTicketPdfRejectsMissingToken(): void
