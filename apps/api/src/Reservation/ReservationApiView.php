@@ -19,6 +19,7 @@ final class ReservationApiView
             'attendee_name' => $reservation->getAttendeeName(),
             'attendee_email' => $reservation->getAttendeeEmail(),
             'attendee_phone' => $reservation->getAttendeePhone(),
+            'seat_labels' => $reservation->getSeatLabels(),
             'status' => $reservation->getStatus(),
             'created_at' => $reservation->getCreatedAt()->format(DATE_ATOM),
             'checked_in_at' => $reservation->getCheckedInAt()?->format(DATE_ATOM),

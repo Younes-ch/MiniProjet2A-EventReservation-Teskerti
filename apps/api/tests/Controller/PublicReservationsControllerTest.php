@@ -26,6 +26,7 @@ class PublicReservationsControllerTest extends WebTestCase
             'full_name' => 'Yassine Builder',
             'email' => 'yassine@example.com',
             'phone' => '+212 600 000 000',
+            'seat_labels' => ['A-03', 'A-04'],
         ], JSON_THROW_ON_ERROR));
 
         $this->assertResponseStatusCodeSame(201);
@@ -39,6 +40,82 @@ class PublicReservationsControllerTest extends WebTestCase
         $this->assertSame('Midnight Resonance 2.0', $data['event_title'] ?? null);
         $this->assertMatchesRegularExpression('/^[A-F0-9]{12}-[a-f0-9]{20}$/', (string) ($data['qr_code_token'] ?? ''));
         $this->assertStringContainsString('/api/reservations/', (string) ($data['ticket_download_url'] ?? ''));
+        $this->assertSame(['A-03', 'A-04'], $data['seat_labels'] ?? null);
+    }
+
+    public function testCreateReservationAssignsFallbackSeatWhenSelectionIsMissing(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/reservations', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'event_slug' => 'midnight-resonance-2-0',
+            'full_name' => 'Auto Seat User',
+            'email' => 'auto-seat@example.com',
+            'phone' => '+212 600 000 100',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(201);
+
+        $data = $this->decodeResponse($client);
+        $seatLabels = $data['seat_labels'] ?? null;
+
+        $this->assertIsArray($seatLabels);
+        $this->assertCount(1, $seatLabels);
+        $this->assertMatchesRegularExpression('/^[A-Z]+-\d{2}$/', (string) ($seatLabels[0] ?? ''));
+    }
+
+    public function testCreateReservationRejectsInvalidSeatLabels(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/reservations', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'event_slug' => 'midnight-resonance-2-0',
+            'full_name' => 'Invalid Seat User',
+            'email' => 'invalid-seat@example.com',
+            'phone' => '+212 600 000 200',
+            'seat_labels' => ['INVALID-SEAT'],
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(400);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('seat_selection_invalid', $data['error'] ?? null);
+    }
+
+    public function testCreateReservationRejectsAlreadyReservedSeatSelection(): void
+    {
+        $client = static::createClient();
+
+        $requestPayload = [
+            'event_slug' => 'midnight-resonance-2-0',
+            'full_name' => 'Seat Owner',
+            'email' => 'seat-owner@example.com',
+            'phone' => '+212 600 000 300',
+            'seat_labels' => ['A-01'],
+        ];
+
+        $client->request('POST', '/api/reservations', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode($requestPayload, JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(201);
+
+        $client->request('POST', '/api/reservations', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            ...$requestPayload,
+            'email' => 'seat-owner-2@example.com',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(409);
+
+        $data = $this->decodeResponse($client);
+        $this->assertSame('seats_unavailable', $data['error'] ?? null);
+        $this->assertSame(['A-01'], $data['seats'] ?? null);
     }
 
     public function testDownloadTicketPdfReturnsPdfForValidReservationToken(): void

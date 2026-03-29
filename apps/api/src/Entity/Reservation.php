@@ -38,6 +38,12 @@ class Reservation
     #[ORM\Column(length: 24)]
     private string $status = self::STATUS_CONFIRMED;
 
+    /**
+     * @var list<string>
+     */
+    #[ORM\Column(name: 'seat_labels', type: Types::JSON)]
+    private array $seatLabels = [];
+
     #[ORM\ManyToOne(targetEntity: Event::class, inversedBy: 'reservations')]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?Event $event = null;
@@ -138,6 +144,24 @@ class Reservation
     public function setStatus(string $status): self
     {
         $this->status = $status;
+
+        return $this;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getSeatLabels(): array
+    {
+        return $this->seatLabels;
+    }
+
+    /**
+     * @param list<string> $seatLabels
+     */
+    public function setSeatLabels(array $seatLabels): self
+    {
+        $this->seatLabels = array_values($seatLabels);
 
         return $this;
     }

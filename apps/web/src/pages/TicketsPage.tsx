@@ -87,6 +87,9 @@ export function TicketsPage() {
               </li>
               <li>{latestTicket.location}</li>
               <li>{latestTicket.attendeeName}</li>
+              {latestTicket.seatLabels.length > 0 ? (
+                <li>Seats: {latestTicket.seatLabels.join(", ")}</li>
+              ) : null}
             </ul>
             <button
               type="button"

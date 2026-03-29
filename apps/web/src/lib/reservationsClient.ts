@@ -3,6 +3,7 @@ export type CreateReservationPayload = {
   full_name: string;
   email: string;
   phone: string;
+  seat_labels?: string[];
 };
 
 export type ReservationResponse = {
@@ -15,6 +16,7 @@ export type ReservationResponse = {
   event_date: string;
   event_time: string;
   event_location: string;
+  seat_labels: string[];
   qr_code_token: string;
   ticket_download_url: string;
 };
@@ -25,6 +27,7 @@ export type AdminReservationItem = {
   attendee_name: string;
   attendee_email: string;
   attendee_phone: string;
+  seat_labels: string[];
   status: string;
   created_at: string;
   checked_in_at: string | null;

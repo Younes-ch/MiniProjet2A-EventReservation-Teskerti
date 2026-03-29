@@ -11,6 +11,7 @@ type ConfirmationState = {
   date: string;
   time: string;
   location: string;
+  seatLabels: string[];
   qrCodeToken: string;
   ticketDownloadUrl: string;
 };
@@ -24,11 +25,15 @@ const defaultConfirmationState: ConfirmationState = {
   date: "October 24, 2024",
   time: "19:00 - 23:00",
   location: "Grand Plaza, NY",
+  seatLabels: [],
   qrCodeToken: "",
   ticketDownloadUrl: "",
 };
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(
+  /\/$/,
+  "",
+);
 
 const buildTicketDownloadHref = (ticketDownloadUrl: string): string => {
   if (
@@ -152,6 +157,17 @@ export function ConfirmationPage() {
               {confirmationState.attendeePhone}
             </span>
           </div>
+
+          {confirmationState.seatLabels.length > 0 ? (
+            <div className="confirmation-seats">
+              <p>Selected Seats</p>
+              <div>
+                {confirmationState.seatLabels.map((seatLabel) => (
+                  <span key={seatLabel}>{seatLabel}</span>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="confirmation-qr-panel">
             <div className="confirmation-qr-shell" aria-hidden="true" />

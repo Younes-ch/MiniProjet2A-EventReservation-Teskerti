@@ -32,6 +32,22 @@ export type UpsertEventPayload = {
   visual_tone: string;
 };
 
+export type PublicEventSeatMapItem = {
+  label: string;
+  status: "available" | "reserved";
+};
+
+export type PublicEventSeatMap = {
+  event_slug: string;
+  total_seats: number;
+  available_seats: number;
+  layout: {
+    columns: number;
+    rows: number;
+  };
+  items: PublicEventSeatMapItem[];
+};
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const buildApiUrl = (path: string) => `${API_BASE_URL}${path}`;
@@ -77,6 +93,11 @@ export const fetchPublicEvents = async (): Promise<PublicEvent[]> => {
 
 export const fetchPublicEventBySlug = (eventSlug: string) =>
   requestJson<PublicEvent>(`/api/events/${encodeURIComponent(eventSlug)}`);
+
+export const fetchPublicEventSeatMap = (eventSlug: string) =>
+  requestJson<PublicEventSeatMap>(
+    `/api/events/${encodeURIComponent(eventSlug)}/seats`,
+  );
 
 export const fetchAdminEvents = async (
   accessToken: string,
