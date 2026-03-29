@@ -31,6 +31,7 @@ services:
       SMTP_ENABLED: ${SMTP_ENABLED:-1}
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
+      APP_PUBLIC_BASE_URL: ${APP_PUBLIC_BASE_URL:-http://localhost:8080}
     depends_on:
       db:
         condition: service_healthy
@@ -70,6 +71,12 @@ services:
       api:
         condition: service_healthy
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1));"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
 
   nginx:
     image: nginx:alpine
@@ -82,7 +89,7 @@ services:
       api:
         condition: service_healthy
       web:
-        condition: service_started
+        condition: service_healthy
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
