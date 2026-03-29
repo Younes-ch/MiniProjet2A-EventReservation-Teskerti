@@ -203,9 +203,9 @@ export function ReservationPage() {
   const [isSeatMapLoading, setSeatMapLoading] = useState(true);
   const [isSeatMapRefreshing, setSeatMapRefreshing] = useState(false);
   const [seatMapError, setSeatMapError] = useState<string | null>(null);
-  const [lastSeatMapSyncedAt, setLastSeatMapSyncedAt] = useState<
-    string | null
-  >(null);
+  const [lastSeatMapSyncedAt, setLastSeatMapSyncedAt] = useState<string | null>(
+    null,
+  );
   const [selectedSeatLabels, setSelectedSeatLabels] = useState<string[]>([]);
   const [isModalOpen, setModalOpen] = useState(true);
   const [formValues, setFormValues] =
@@ -453,7 +453,7 @@ export function ReservationPage() {
 
         setSelectedEvent(null);
         setSeatMap(null);
-  setLastSeatMapSyncedAt(null);
+        setLastSeatMapSyncedAt(null);
         setSelectedSeatLabels([]);
 
         if (error instanceof Error && error.message === "event_not_found") {
@@ -766,7 +766,9 @@ export function ReservationPage() {
               <button
                 type="button"
                 className="reservation-seat-tool-button reservation-seat-tool-button-subtle"
-                disabled={isSubmitting || isSeatMapLoading || availableSeatCount === 0}
+                disabled={
+                  isSubmitting || isSeatMapLoading || availableSeatCount === 0
+                }
                 onClick={handleSeatSelectionAutoFill}
               >
                 Select best {MAX_SEAT_SELECTION}
@@ -775,7 +777,9 @@ export function ReservationPage() {
               <button
                 type="button"
                 className="reservation-seat-tool-button reservation-seat-tool-button-subtle"
-                disabled={isSubmitting || isSeatMapLoading || availableSeatCount === 0}
+                disabled={
+                  isSubmitting || isSeatMapLoading || availableSeatCount === 0
+                }
                 onClick={handleSeatSelectionReset}
               >
                 Reset selection
