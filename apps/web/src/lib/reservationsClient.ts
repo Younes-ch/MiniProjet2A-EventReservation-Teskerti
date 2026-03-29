@@ -15,6 +15,8 @@ export type ReservationResponse = {
   event_date: string;
   event_time: string;
   event_location: string;
+  qr_code_token: string;
+  ticket_download_url: string;
 };
 
 export type AdminReservationItem = {

@@ -24,6 +24,17 @@ class ReservationRepository extends ServiceEntityRepository
         return $reservation;
     }
 
+    public function findOneByReservationIdAndQrCodeToken(string $reservationId, string $qrCodeToken): ?Reservation
+    {
+        /** @var Reservation|null $reservation */
+        $reservation = $this->findOneBy([
+            'reservationId' => $reservationId,
+            'qrCodeToken' => $qrCodeToken,
+        ]);
+
+        return $reservation;
+    }
+
     /**
      * @return array{items: list<Reservation>, total: int}
      */

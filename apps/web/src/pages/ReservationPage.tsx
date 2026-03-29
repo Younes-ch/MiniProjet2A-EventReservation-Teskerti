@@ -8,6 +8,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchPublicEventBySlug, type PublicEvent } from "../lib/eventsClient";
 import { createReservation } from "../lib/reservationsClient";
+import { saveLatestTicket } from "../lib/ticketStorage";
 
 type ReservationFormValues = {
   fullName: string;
@@ -28,6 +29,8 @@ type ReservationConfirmationState = {
   date: string;
   time: string;
   location: string;
+  qrCodeToken: string;
+  ticketDownloadUrl: string;
 };
 
 const FALLBACK_EVENT_SLUG = "midnight-resonance-2-0";
@@ -310,7 +313,11 @@ export function ReservationPage() {
         date: payload.event_date,
         time: payload.event_time,
         location: payload.event_location,
+        qrCodeToken: payload.qr_code_token,
+        ticketDownloadUrl: payload.ticket_download_url,
       };
+
+      saveLatestTicket(confirmationState);
 
       setSubmitting(false);
       setModalOpen(false);
