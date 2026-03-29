@@ -15,6 +15,7 @@ type ConfirmationState = {
   seatLabels: string[];
   qrCodeToken: string;
   ticketDownloadUrl: string;
+  calendarDownloadUrl: string;
 };
 
 const defaultConfirmationState: ConfirmationState = {
@@ -29,6 +30,7 @@ const defaultConfirmationState: ConfirmationState = {
   seatLabels: [],
   qrCodeToken: "",
   ticketDownloadUrl: "",
+  calendarDownloadUrl: "",
 };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(
@@ -36,15 +38,15 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(
   "",
 );
 
-const buildTicketDownloadHref = (ticketDownloadUrl: string): string => {
+const buildDownloadHref = (downloadUrl: string): string => {
   if (
-    ticketDownloadUrl.startsWith("http://") ||
-    ticketDownloadUrl.startsWith("https://")
+    downloadUrl.startsWith("http://") ||
+    downloadUrl.startsWith("https://")
   ) {
-    return ticketDownloadUrl;
+    return downloadUrl;
   }
 
-  return `${API_BASE_URL}${ticketDownloadUrl}`;
+  return `${API_BASE_URL}${downloadUrl}`;
 };
 
 const reservationMeta = [
@@ -89,7 +91,24 @@ export function ConfirmationPage() {
     setDownloadErrorMessage(null);
 
     window.open(
-      buildTicketDownloadHref(confirmationState.ticketDownloadUrl),
+      buildDownloadHref(confirmationState.ticketDownloadUrl),
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
+
+  const handleDownloadCalendar = () => {
+    if (confirmationState.calendarDownloadUrl.trim().length === 0) {
+      setDownloadErrorMessage(
+        "Calendar download link is unavailable for this reservation.",
+      );
+      return;
+    }
+
+    setDownloadErrorMessage(null);
+
+    window.open(
+      buildDownloadHref(confirmationState.calendarDownloadUrl),
       "_blank",
       "noopener,noreferrer",
     );
@@ -198,6 +217,14 @@ export function ConfirmationPage() {
           disabled={confirmationState.ticketDownloadUrl.trim().length === 0}
         >
           Download PDF Ticket
+        </button>
+        <button
+          type="button"
+          className="button-secondary confirmation-calendar"
+          onClick={handleDownloadCalendar}
+          disabled={confirmationState.calendarDownloadUrl.trim().length === 0}
+        >
+          Download Calendar (.ics)
         </button>
         <Link to="/" className="button-secondary confirmation-return">
           Back to Events

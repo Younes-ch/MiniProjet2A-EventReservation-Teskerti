@@ -10,6 +10,7 @@ export type LatestTicket = {
   seatLabels: string[];
   qrCodeToken: string;
   ticketDownloadUrl: string;
+  calendarDownloadUrl?: string;
 };
 
 const TICKET_STORAGE_KEY = "tiskerti.latest.ticket";
@@ -34,7 +35,9 @@ const isValidTicket = (value: unknown): value is LatestTicket => {
     Array.isArray(parsed.seatLabels) &&
     parsed.seatLabels.every((seatLabel) => typeof seatLabel === "string") &&
     typeof parsed.qrCodeToken === "string" &&
-    typeof parsed.ticketDownloadUrl === "string"
+    typeof parsed.ticketDownloadUrl === "string" &&
+    (parsed.calendarDownloadUrl === undefined ||
+      typeof parsed.calendarDownloadUrl === "string")
   );
 };
 

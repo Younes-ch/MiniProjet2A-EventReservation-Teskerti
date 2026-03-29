@@ -42,6 +42,7 @@ type ReservationConfirmationState = {
   seatLabels: string[];
   qrCodeToken: string;
   ticketDownloadUrl: string;
+  calendarDownloadUrl: string;
 };
 
 type SeatMapActionToast = {
@@ -573,6 +574,7 @@ export function ReservationPage() {
         seatLabels: payload.seat_labels,
         qrCodeToken: payload.qr_code_token,
         ticketDownloadUrl: payload.ticket_download_url,
+        calendarDownloadUrl: payload.calendar_download_url,
       };
 
       saveLatestTicket(confirmationState);

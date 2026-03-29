@@ -2799,6 +2799,11 @@ select:focus-visible,
   min-width: 260px;
 }
 
+.confirmation-calendar {
+  margin-top: 4px;
+  min-width: 260px;
+}
+
 .confirmation-actions {
   width: 100%;
   display: flex;
@@ -3046,6 +3051,11 @@ select:focus-visible,
   }
 
   .confirmation-download {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .confirmation-calendar {
     width: 100%;
     min-width: 0;
   }

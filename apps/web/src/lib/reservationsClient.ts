@@ -19,6 +19,7 @@ export type ReservationResponse = {
   seat_labels: string[];
   qr_code_token: string;
   ticket_download_url: string;
+  calendar_download_url: string;
 };
 
 export type AdminReservationItem = {
