@@ -3,6 +3,7 @@
 namespace App\Tests\Controller;
 
 use App\Tests\Support\ResetsDatabaseWithSeedEvents;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class PublicReservationsControllerTest extends WebTestCase
@@ -187,6 +188,59 @@ class PublicReservationsControllerTest extends WebTestCase
         $this->assertSame('ticket_not_found', $data['error'] ?? null);
     }
 
+    public function testJoinWaitlistCreatesWaitlistedReservationWhenEventIsSoldOut(): void
+    {
+        $client = static::createClient();
+        $this->markEventAsSoldOut('ephemeral-visions-gallery');
+
+        $client->request('POST', '/api/reservations/waitlist', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'event_slug' => 'ephemeral-visions-gallery',
+            'full_name' => 'Waitlist User',
+            'email' => 'waitlist@example.com',
+            'phone' => '+212 611 111 111',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(201);
+        $data = $this->decodeResponse($client);
+
+        $this->assertSame('waitlisted', $data['status'] ?? null);
+        $this->assertSame([], $data['seat_labels'] ?? null);
+        $this->assertSame('', $data['ticket_download_url'] ?? null);
+        $this->assertSame(1, $data['waitlist_position'] ?? null);
+    }
+
+    public function testDownloadCalendarInviteReturnsIcsForConfirmedReservation(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/reservations', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode([
+            'event_slug' => 'midnight-resonance-2-0',
+            'full_name' => 'Calendar User',
+            'email' => 'calendar@example.com',
+            'phone' => '+212 622 222 222',
+        ], JSON_THROW_ON_ERROR));
+
+        $this->assertResponseStatusCodeSame(201);
+        $reservationPayload = $this->decodeResponse($client);
+
+        $reservationId = (string) ($reservationPayload['reservation_id'] ?? '');
+        $qrCodeToken = (string) ($reservationPayload['qr_code_token'] ?? '');
+
+        $client->request('GET', sprintf('/api/reservations/%s/calendar.ics?token=%s', $reservationId, $qrCodeToken));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertResponseHeaderSame('content-type', 'text/calendar; charset=utf-8');
+
+        $icsContent = (string) $client->getResponse()->getContent();
+        $this->assertStringContainsString('BEGIN:VCALENDAR', $icsContent);
+        $this->assertStringContainsString('BEGIN:VEVENT', $icsContent);
+        $this->assertStringContainsString('SUMMARY:', $icsContent);
+    }
+
     public function testCreateReservationRejectsMissingFields(): void
     {
         $client = static::createClient();
@@ -249,5 +303,18 @@ class PublicReservationsControllerTest extends WebTestCase
     private function decodeResponse($client): array
     {
         return json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    private function markEventAsSoldOut(string $eventSlug): void
+    {
+        /** @var EntityManagerInterface $entityManager */
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+
+        $entityManager->getConnection()->executeStatement(
+            'UPDATE events SET seats_available = 0 WHERE slug = :slug',
+            [
+                'slug' => $eventSlug,
+            ],
+        );
     }
 }

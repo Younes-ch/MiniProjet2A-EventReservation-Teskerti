@@ -35,6 +35,45 @@ class ReservationRepository extends ServiceEntityRepository
         return $reservation;
     }
 
+    public function countAllReservations(): int
+    {
+        return (int) $this->createQueryBuilder('reservation')
+            ->select('COUNT(reservation.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function countByStatus(string $status): int
+    {
+        return (int) $this->createQueryBuilder('reservation')
+            ->select('COUNT(reservation.id)')
+            ->where('reservation.status = :status')
+            ->setParameter('status', $status)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function countCheckedInReservations(): int
+    {
+        return (int) $this->createQueryBuilder('reservation')
+            ->select('COUNT(reservation.id)')
+            ->where('reservation.checkedInAt IS NOT NULL')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function countWaitlistedForEvent(int $eventId): int
+    {
+        return (int) $this->createQueryBuilder('reservation')
+            ->select('COUNT(reservation.id)')
+            ->where('IDENTITY(reservation.event) = :eventId')
+            ->andWhere('reservation.status = :status')
+            ->setParameter('eventId', $eventId)
+            ->setParameter('status', Reservation::STATUS_WAITLISTED)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     /**
      * @return list<string>
      */

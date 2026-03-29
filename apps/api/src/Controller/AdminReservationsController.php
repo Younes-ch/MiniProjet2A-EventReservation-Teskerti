@@ -45,7 +45,7 @@ final class AdminReservationsController extends AbstractController
         }
 
         $statusRaw = strtolower(trim((string) $request->query->get('status', 'all')));
-        if (!in_array($statusRaw, ['all', Reservation::STATUS_CONFIRMED, Reservation::STATUS_CANCELLED], true)) {
+        if (!in_array($statusRaw, ['all', Reservation::STATUS_CONFIRMED, Reservation::STATUS_CANCELLED, Reservation::STATUS_WAITLISTED], true)) {
             return $this->json([
                 'error' => 'invalid_reservation_status_filter',
             ], 400);
@@ -114,7 +114,7 @@ final class AdminReservationsController extends AbstractController
         }
 
         $status = strtolower(trim((string) ($payload['status'] ?? '')));
-        if (!in_array($status, [Reservation::STATUS_CONFIRMED, Reservation::STATUS_CANCELLED], true)) {
+        if (!in_array($status, [Reservation::STATUS_CONFIRMED, Reservation::STATUS_CANCELLED, Reservation::STATUS_WAITLISTED], true)) {
             return $this->json([
                 'error' => 'invalid_reservation_status',
             ], 400);
@@ -129,9 +129,9 @@ final class AdminReservationsController extends AbstractController
     #[Route('/api/admin/reservations/check-in', name: 'api_admin_reservations_check_in', methods: ['POST'])]
     public function checkIn(Request $request): JsonResponse
     {
-        $authorizationResult = $this->requireAdminClaims($request);
-        if ($authorizationResult instanceof JsonResponse) {
-            return $authorizationResult;
+        $claims = $this->requireAdminClaims($request);
+        if ($claims instanceof JsonResponse) {
+            return $claims;
         }
 
         $payload = $this->decodeJsonPayload($request);
@@ -172,6 +172,7 @@ final class AdminReservationsController extends AbstractController
 
         $reservation->setCheckedInAt(new \DateTimeImmutable());
         $this->entityManager->flush();
+        $this->recordCheckInAudit($reservation, (string) ($claims['sub'] ?? 'admin@local'));
 
         return $this->json([
             'status' => 'checked_in',
@@ -234,5 +235,29 @@ final class AdminReservationsController extends AbstractController
         }
 
         return $data;
+    }
+
+    private function recordCheckInAudit(Reservation $reservation, string $checkedInBy): void
+    {
+        $reservationPrimaryId = $reservation->getId();
+        $checkedInAt = $reservation->getCheckedInAt();
+
+        if (null === $reservationPrimaryId || null === $checkedInAt) {
+            return;
+        }
+
+        $connection = $this->entityManager->getConnection();
+        $schemaManager = $connection->createSchemaManager();
+
+        if (!$schemaManager->tablesExist(['event_checkins'])) {
+            return;
+        }
+
+        $connection->insert('event_checkins', [
+            'reservation_id' => $reservationPrimaryId,
+            'checked_in_by' => $checkedInBy,
+            'checked_in_at' => $checkedInAt->format('Y-m-d H:i:s'),
+            'method' => 'qr_scan',
+        ]);
     }
 }
