@@ -45,6 +45,9 @@ class Reservation
     #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
+    #[ORM\Column(name: 'checked_in_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $checkedInAt = null;
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
@@ -147,6 +150,18 @@ class Reservation
     public function setCreatedAt(\DateTimeImmutable $createdAt): self
     {
         $this->createdAt = $createdAt;
+
+        return $this;
+    }
+
+    public function getCheckedInAt(): ?\DateTimeImmutable
+    {
+        return $this->checkedInAt;
+    }
+
+    public function setCheckedInAt(?\DateTimeImmutable $checkedInAt): self
+    {
+        $this->checkedInAt = $checkedInAt;
 
         return $this;
     }

@@ -126,6 +126,59 @@ final class AdminReservationsController extends AbstractController
         return $this->json($this->reservationApiView->toArray($reservation));
     }
 
+    #[Route('/api/admin/reservations/check-in', name: 'api_admin_reservations_check_in', methods: ['POST'])]
+    public function checkIn(Request $request): JsonResponse
+    {
+        $authorizationResult = $this->requireAdminClaims($request);
+        if ($authorizationResult instanceof JsonResponse) {
+            return $authorizationResult;
+        }
+
+        $payload = $this->decodeJsonPayload($request);
+        if (null === $payload) {
+            return $this->json([
+                'error' => 'invalid_json_payload',
+            ], 400);
+        }
+
+        $reservationId = trim((string) ($payload['reservation_id'] ?? ''));
+        $qrCodeToken = trim((string) ($payload['qr_code_token'] ?? ''));
+
+        if ('' === $reservationId || '' === $qrCodeToken) {
+            return $this->json([
+                'error' => 'checkin_payload_invalid',
+            ], 400);
+        }
+
+        $reservation = $this->reservationRepository->findOneByReservationIdAndQrCodeToken($reservationId, $qrCodeToken);
+        if (null === $reservation) {
+            return $this->json([
+                'error' => 'ticket_not_found',
+            ], 404);
+        }
+
+        if (Reservation::STATUS_CONFIRMED !== $reservation->getStatus()) {
+            return $this->json([
+                'error' => 'reservation_not_confirmed',
+            ], 409);
+        }
+
+        if (null !== $reservation->getCheckedInAt()) {
+            return $this->json([
+                'error' => 'reservation_already_checked_in',
+                'checked_in_at' => $reservation->getCheckedInAt()?->format(DATE_ATOM),
+            ], 409);
+        }
+
+        $reservation->setCheckedInAt(new \DateTimeImmutable());
+        $this->entityManager->flush();
+
+        return $this->json([
+            'status' => 'checked_in',
+            'reservation' => $this->reservationApiView->toArray($reservation),
+        ]);
+    }
+
     /**
      * @return array<string, mixed>|JsonResponse
      */

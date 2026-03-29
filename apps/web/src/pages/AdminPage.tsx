@@ -33,6 +33,7 @@ import {
   type UpsertEventPayload,
 } from "../lib/eventsClient";
 import {
+  checkInAdminReservation,
   fetchAdminReservations,
   updateAdminReservationStatus,
   type AdminReservationItem,
@@ -74,6 +75,7 @@ type AdminReservationRow = {
   eventTitle: string;
   bookedAt: string;
   status: "confirmed" | "cancelled";
+  checkedInAt: string | null;
 };
 
 const RESERVATIONS_PER_PAGE = 6;
@@ -264,6 +266,9 @@ const buildReservationRows = (
     eventTitle: reservation.event.title ?? "Unknown event",
     bookedAt: formatDateTime(reservation.created_at),
     status: reservation.status === "cancelled" ? "cancelled" : "confirmed",
+    checkedInAt: reservation.checked_in_at
+      ? formatDateTime(reservation.checked_in_at)
+      : null,
   }));
 
 const getReservationStatusLabel = (
@@ -316,6 +321,22 @@ const mapCrudErrorMessage = (error: unknown): string => {
 
   if (error.message === "invalid_reservation_status") {
     return "Reservation status is invalid.";
+  }
+
+  if (error.message === "checkin_payload_invalid") {
+    return "Reservation code and QR token are required for check-in.";
+  }
+
+  if (error.message === "ticket_not_found") {
+    return "Ticket token is invalid or the reservation could not be found.";
+  }
+
+  if (error.message === "reservation_not_confirmed") {
+    return "Only confirmed reservations can be checked in.";
+  }
+
+  if (error.message === "reservation_already_checked_in") {
+    return "This reservation was already checked in.";
   }
 
   if (error.message === "invalid_reservation_status_filter") {
@@ -434,6 +455,8 @@ export function AdminPage() {
     useState("");
   const [reservationQueryInput, setReservationQueryInput] = useState("");
   const [reservationSearchQuery, setReservationSearchQuery] = useState("");
+  const [checkInReservationCode, setCheckInReservationCode] = useState("");
+  const [checkInQrToken, setCheckInQrToken] = useState("");
   const [isEditorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("create");
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
@@ -788,6 +811,45 @@ export function AdminPage() {
       await runWithFreshAccessToken((token) =>
         updateAdminReservationStatus(token, reservation.id, nextStatus),
       );
+      setReloadNonce((previous) => previous + 1);
+    } catch (error) {
+      setActionErrorMessage(mapCrudErrorMessage(error));
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
+  const handleCheckInSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedReservationCode = checkInReservationCode.trim();
+    const normalizedQrToken = checkInQrToken.trim();
+
+    if (normalizedReservationCode.length === 0 || normalizedQrToken.length === 0) {
+      setActionErrorMessage(
+        "Reservation code and QR token are required for check-in.",
+      );
+      return;
+    }
+
+    setActionSubmitting(true);
+    setActionErrorMessage(null);
+    setActionSuccessMessage(null);
+
+    try {
+      const checkInResult = await runWithFreshAccessToken((token) =>
+        checkInAdminReservation(
+          token,
+          normalizedReservationCode,
+          normalizedQrToken,
+        ),
+      );
+
+      setActionSuccessMessage(
+        `Reservation ${checkInResult.reservation.reservation_id} checked in successfully.`,
+      );
+      setCheckInReservationCode("");
+      setCheckInQrToken("");
       setReloadNonce((previous) => previous + 1);
     } catch (error) {
       setActionErrorMessage(mapCrudErrorMessage(error));
@@ -1460,6 +1522,30 @@ export function AdminPage() {
               </form>
             </div>
 
+            <form className="admin-checkin-form" onSubmit={handleCheckInSubmit}>
+              <input
+                type="text"
+                value={checkInReservationCode}
+                onChange={(event) => setCheckInReservationCode(event.target.value)}
+                placeholder="Reservation code (e.g. RSV-1A2B-3C4D)"
+                aria-label="Reservation code"
+              />
+              <input
+                type="text"
+                value={checkInQrToken}
+                onChange={(event) => setCheckInQrToken(event.target.value)}
+                placeholder="QR token"
+                aria-label="QR token"
+              />
+              <button
+                type="submit"
+                className="admin-row-action-button"
+                disabled={isActionSubmitting}
+              >
+                {isActionSubmitting ? "Validating..." : "Validate & Check-in"}
+              </button>
+            </form>
+
             {recentReservations.length > 0 ? (
               <ul className="admin-reservation-list">
                 {recentReservations.map((reservation) => (
@@ -1471,6 +1557,7 @@ export function AdminPage() {
                       <strong>{reservation.attendeeName}</strong>
                       <small>{reservation.attendeeEmail}</small>
                       <small>{reservation.eventTitle}</small>
+                      <small>{reservation.reservationCode}</small>
                     </div>
                     <div className="admin-reservation-meta">
                       <span
@@ -1479,6 +1566,11 @@ export function AdminPage() {
                         {getReservationStatusLabel(reservation.status)}
                       </span>
                       <small>{reservation.bookedAt}</small>
+                      {reservation.checkedInAt ? (
+                        <small className="admin-reservation-checkin">
+                          Checked in: {reservation.checkedInAt}
+                        </small>
+                      ) : null}
                       <button
                         type="button"
                         className="admin-row-action-button"
