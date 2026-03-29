@@ -44,6 +44,11 @@ type ReservationConfirmationState = {
   ticketDownloadUrl: string;
 };
 
+type SeatMapActionToast = {
+  tone: "success" | "error";
+  message: string;
+};
+
 const FALLBACK_EVENT_SLUG = "midnight-resonance-2-0";
 const MAX_SEAT_SELECTION = 4;
 
@@ -203,6 +208,8 @@ export function ReservationPage() {
   const [isSeatMapLoading, setSeatMapLoading] = useState(true);
   const [isSeatMapRefreshing, setSeatMapRefreshing] = useState(false);
   const [seatMapError, setSeatMapError] = useState<string | null>(null);
+  const [seatMapActionToast, setSeatMapActionToast] =
+    useState<SeatMapActionToast | null>(null);
   const [lastSeatMapSyncedAt, setLastSeatMapSyncedAt] = useState<string | null>(
     null,
   );
@@ -358,7 +365,7 @@ export function ReservationPage() {
     }
 
     setSeatMapRefreshing(true);
-    setSeatMapError(null);
+    setSeatMapActionToast(null);
 
     try {
       const seatMapPayload = await fetchPublicEventSeatMap(selectedEvent.slug);
@@ -387,8 +394,15 @@ export function ReservationPage() {
 
       setLastSeatMapSyncedAt(new Date().toISOString());
       setSubmitErrorMessage(null);
+      setSeatMapActionToast({
+        tone: "success",
+        message: "Seat availability refreshed.",
+      });
     } catch {
-      setSeatMapError("Unable to refresh seat map right now.");
+      setSeatMapActionToast({
+        tone: "error",
+        message: "Unable to refresh seats right now. Try again in a moment.",
+      });
     } finally {
       setSeatMapRefreshing(false);
     }
@@ -423,6 +437,7 @@ export function ReservationPage() {
       setSeatMapLoading(true);
       setEventLoadError(null);
       setSeatMapError(null);
+      setSeatMapActionToast(null);
       setLastSeatMapSyncedAt(null);
       setSelectedSeatLabels([]);
 
@@ -477,6 +492,20 @@ export function ReservationPage() {
       isMounted = false;
     };
   }, [selectedEventSlug]);
+
+  useEffect(() => {
+    if (!seatMapActionToast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSeatMapActionToast(null);
+    }, 2800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [seatMapActionToast]);
 
   const handleReservationSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -789,6 +818,15 @@ export function ReservationPage() {
             {seatMapSyncedTimeLabel ? (
               <p className="reservation-seat-sync-note" aria-live="polite">
                 Availability synced at {seatMapSyncedTimeLabel}
+              </p>
+            ) : null}
+
+            {seatMapActionToast ? (
+              <p
+                className={`reservation-seat-toast reservation-seat-toast-${seatMapActionToast.tone}`}
+                role={seatMapActionToast.tone === "error" ? "alert" : "status"}
+              >
+                {seatMapActionToast.message}
               </p>
             ) : null}
 
