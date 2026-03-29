@@ -7,6 +7,10 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchPublicEventBySlug, type PublicEvent } from "../lib/eventsClient";
+import {
+  buildVenueMapDirectionsUrl,
+  buildVenueMapEmbedUrl,
+} from "../lib/mapLinks";
 import { createReservation } from "../lib/reservationsClient";
 import { saveLatestTicket } from "../lib/ticketStorage";
 
@@ -345,6 +349,12 @@ export function ReservationPage() {
   const eventLocation = selectedEvent
     ? `${selectedEvent.location}, ${selectedEvent.city}`
     : "Venue details are loading";
+  const venueMapEmbedUrl = selectedEvent
+    ? buildVenueMapEmbedUrl(selectedEvent.location, selectedEvent.city)
+    : "";
+  const venueMapDirectionsUrl = selectedEvent
+    ? buildVenueMapDirectionsUrl(selectedEvent.location, selectedEvent.city)
+    : "";
   const bookingDisabled = isEventLoading || Boolean(eventLoadError);
 
   return (
@@ -433,12 +443,34 @@ export function ReservationPage() {
           <p>
             {eventDate} at {eventTime}
           </p>
+          {selectedEvent ? (
+            <a
+              className="button-secondary reservation-location-link"
+              href={venueMapDirectionsUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open directions
+            </a>
+          ) : null}
         </div>
-        <div
-          className="reservation-map"
-          role="img"
-          aria-label="Map preview placeholder"
-        />
+        {selectedEvent ? (
+          <div className="reservation-map-shell">
+            <iframe
+              className="reservation-map-frame"
+              title={`Venue map for ${selectedEvent.title}`}
+              src={venueMapEmbedUrl}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        ) : (
+          <div
+            className="reservation-map"
+            role="img"
+            aria-label="Map preview placeholder"
+          />
+        )}
       </section>
 
       {isModalOpen ? (
